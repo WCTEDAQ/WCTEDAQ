@@ -93,6 +93,88 @@ do
     shift
 done
 
+# Installs CAEN libraries.
+# Arguments:
+#   1: path to install to. Installs libraries to $1/lib and header files to
+#      $1/include
+install_caen() {
+  (
+    shopt -s nullglob
+
+    # Check if the libraries are already installed locally or to a place known to GCC
+    declare -a libs=(CAENComm CAENVME) found=(${libs[@]})
+    declare -i i n=0
+    IFS=:
+    for dir in \
+      "$1/lib" \
+      $LD_LIBRARY_PATH \
+      `g++ -print-search-dirs | sed -n 's,^libraries: =,,; T; p'`
+    do
+      for ((i = 0; i < ${#libs[@]}; ++i)); do
+        if [[ -e "$dir/lib${libs[$i]}.so" ]]; then
+          if [[ "${found[$i]}" != 1 ]]; then
+            found[i]=1
+            n+=1
+          fi
+        fi
+      done
+      ((n == ${#libs[@]})) && break
+    done
+    IFS=
+    ((n == ${#libs[@]})) && return
+
+    tmp=`mktemp -dt 'caen.XXXXXX'` || return $?
+    trap 'rm -r "$tmp"' exit
+
+    # Check if the archives are already available
+    declare -a archives
+    n=0
+    IFS=$'\n'
+    for lib in ${libs[@]}; do
+      archives=("$1"/$lib*.tgz)
+      ((${#archives[@]})) && n+=1
+    done
+    IFS=
+    if ((n == ${#libs[@]})); then
+      dir="$1"
+    # else try installing from the WCTE repository
+    elif git clone ssh://git@github.com/WCTEDAQ/CaenDependancies "$tmp/caen"; then
+      dir="$tmp/caen"
+    else # ask the user
+      echo
+      echo
+      echo 'Distribution of CAEN libraries is resitricted by the license. Please download the following libraries from the CAEN web site:'
+      echo 'CAENComm   https://www.caen.it/products/caencomm-library/'
+      echo 'CAENVMELib https://www.caen.it/products/caencomm-library/'
+      echo "and put them to $tmp or enter a different directory below"
+      echo 'Hit Enter to continue or Ctrl-D to skip the installation'
+      read -ep "[$tmp] " dir || return 0
+      [[ -z $dir ]] && dir=$tmp
+    fi
+
+    if ! [[ -d "$1/lib" ]]; then
+      mkdir -p "$1/lib"
+    fi &&
+    if ! [[ -d "$1/include" ]]; then
+      mkdir -p "$1/include"
+    fi || return 1
+
+    for lib in ${libs[@]}; do
+      archive=`ls "$dir/$lib"* | sort -Vr | head -n1`
+      distr=`tar -tf "$archive" | head -n1`
+      version=${archive#$dir/$lib*-v}
+      version=${version%.tgz}
+      if ! [[ -e "$1/${archive##*/}" ]]; then
+        cp "$archive" "$1" && chmod -x "$1/${archive##*/}"
+      fi &&
+      tar -C "$tmp" -xf "$archive" &&
+      cp -v "$tmp/$distr/lib/x64/lib$lib.so.v$version" "$1/lib" &&
+      ln -svf "lib$lib.so.v$version" "$1/lib/lib$lib.so" &&
+      cp -v "$tmp/$distr/include"/* "$1/include" || return 1
+    done
+  )
+}
+
 if [ $init -eq 1 ]
 then
     
@@ -179,12 +261,17 @@ fi
 
 if [ $caenpp -eq 1 ]
 then
-    git clone https://github.com/WCTEDAQ/caenpp.git caen++
+    [[ ! -d caen ]] && mkdir caen
+    install_caen caen
+    export LD_LIBRARY_PATH=`pwd`/caen/lib:$LD_LIBRARY_PATH
 
-    cd caen++
-    make -j $threads
-    export LD_LIBRARY_PATH=`pwd`:$LD_LIBRARY_PATH
-    cd ..
+    git clone https://github.com/WCTEDAQ/caenpp.git caen/caen++
+    cd caen/caen++
+    ./configure --prefix="$PWD/.." --without-digitizer &&
+    CPATH=../include make -j $threads &&
+    make install
+
+    cd ../..
 fi
 
 cd ../
