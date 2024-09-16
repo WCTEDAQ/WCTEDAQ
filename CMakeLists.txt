@@ -1,4 +1,3 @@
-#todo sym links not copy headers, use macro to seach for .so files in Usertools and add the libraries to libs list and symlink to libs folder
 
 cmake_minimum_required (VERSION 2.6)
 
@@ -30,8 +29,46 @@ set(TOOLDAQ_INC "${DEPENDENCIES_PATH}/ToolDAQFramework/include")
 set(TOOLDAQ_LIBS_PATH "${DEPENDENCIES_PATH}/ToolDAQFramework/lib")
 set(TOOLDAQ_LIBS DAQDataModelBase DAQLogging DAQStore ServiceDiscovery ToolDAQChain)
 
-include_directories (${DATAMODEL_INC} ${MYTOOLS_INC} ${TOOLFRAMEWORK_INC} ${TOOLDAQ_INC} ${ZMQ_INC} ${BOOST_INC})
-link_directories(${DATAMODEL_LIB_PATH} ${MYTOOLS_LIB_PATH} ${TOOLFRAMEWORK_LIBS_PATH} ${TOOLDAQ_LIBS_PATH} ${ZMQ_LIB_PATH} ${BOOST_LIB_PATH})
+set(CAENPP_INC "${DEPENDENCIES_PATH}/caen/include")
+set(CAENPP_LIBS_PATH "${DEPENDENCIES_PATH}/caen/lib")
+set(CAENPP_LIBS caen++)
+set(CAENCOMM_LIBS CAENComm)
+
+include_directories (
+   ${DATAMODEL_INC} 
+   ${MYTOOLS_INC} 
+   ${TOOLFRAMEWORK_INC} 
+   ${TOOLDAQ_INC} 
+   ${ZMQ_INC} 
+   ${BOOST_INC} 
+   ${CAENPP_INC}
+)
+
+link_directories(
+   ${DATAMODEL_LIB_PATH} 
+   ${MYTOOLS_LIB_PATH} 
+   ${TOOLFRAMEWORK_LIBS_PATH} 
+   ${TOOLDAQ_LIBS_PATH} 
+   ${ZMQ_LIB_PATH} 
+   ${BOOST_LIB_PATH} 
+   ${CAENPP_LIBS_PATH}
+)
+
+add_executable (main ${PROJECT_SOURCE_DIR}/src/main.cpp)
+
+target_link_libraries (
+   main
+   MyTools
+   DataModel
+   ${DATAMODEL_LIBS} 
+   ${MYTOOLS_LIBS} 
+   ${TOOLFRAMEWORK_LIBS} 
+   ${TOOLDAQ_LIBS} 
+   ${ZMQ_LIBS} 
+   ${BOOST_LIBS} 
+   ${CAENPP_LIBS} 
+   ${CAENCOMM_LIBS}
+)
 
 MACRO(HEADER_DIRECTORIES return_list)
     FILE(GLOB_RECURSE new_list ${PROJECT_SOURCE_DIR}/src/*.h ${PROJECT_SOURCE_DIR}/DataModel/*.h ${PROJECT_SOURCE_DIR}/UserTools/*.h )
@@ -58,5 +95,3 @@ add_library(DataModel SHARED ${DATAMODEL_SRC})
 file(GLOB_RECURSE MYTOOLS_SRC RELATIVE ${CMAKE_SOURCE_DIR} "UserTools/*.cpp")
 add_library(MyTools SHARED ${MYTOOLS_SRC})
 
-add_executable (main ${PROJECT_SOURCE_DIR}/src/main.cpp)
-target_link_libraries (main MyTools DataModel pthread ${DATAMODEL_LIBS} ${MYTOOLS_LIBS} ${TOOLFRAMEWORK_LIBS} ${TOOLDAQ_LIBS} ${ZMQ_LIBS} ${BOOST_LIBS})
