@@ -25,6 +25,7 @@
 #include "UnsortedData.h"
 #include "VMEReadout.h"
 
+#include "HKMPMTHit.h"
 #include "TDCHit.h"
 #include "QDCHit.h"
 
