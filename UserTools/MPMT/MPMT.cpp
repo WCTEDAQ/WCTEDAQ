@@ -248,24 +248,43 @@ bool MPMT::ProcessData(void* data) {
    std::vector<WCTEMPMTPPS> vec_mpmt_pps;
    std::vector<WCTEMPMTWaveform> vec_mpmt_waveform;
    std::vector<HKMPMTHit> vec_hkmpmt_hit;
+   std::vector<HKMPMTPPS> vec_hkmpmt_pps;
 
    char* mpmt_data= reinterpret_cast<char*>(msgs->mpmt_data->data());
    //printf("data size %d\n",msgs->mpmt_data->size());
 
    if (card_type == 2) {     // is HKMPMT event
 
+      std::cout << "== DAQ HEADER ==" << std::endl;
+      daq_header->Print();
+
       while(current_byte < bytes) {
 
-         HKMPMTHit tmp(card_id, &mpmt_data[current_byte]);
-         current_byte += tmp.GetSize();
-         vec_hkmpmt_hit.push_back(tmp);
+         if(((mpmt_data[current_byte] & 0b00111111) >> 2) == 0U) { // MPMT Hit event
 
-         std::cout << "== DAQ HEADER ==" << std::endl;
-         daq_header->Print();
-         std::cout << "== EVENT ==" << std::endl;
-         tmp.Print();
-         //tmp.Dump();
-      }
+            HKMPMTHit tmp(card_id, &mpmt_data[current_byte]);
+            current_byte += tmp.GetSize();
+            vec_hkmpmt_hit.push_back(tmp);
+
+            std::cout << "== EVENT ==" << std::endl;
+            tmp.Print();
+
+         } else if(((mpmt_data[current_byte] & 0b00111111) >> 2) == 15U) { // MPMT PPS event
+            
+            HKMPMTPPS tmp(card_id, &mpmt_data[current_byte]);
+            current_byte += tmp.GetSize();
+            vec_hkmpmt_pps.push_back(tmp);
+
+            std::cout << "== PPS ==" << std::endl;
+            tmp.Print();
+
+         } else {
+
+            msgs->m_data->services->SendLog("ERROR: HKMPMT data is corrupt or of unknown structure", 0);
+            return false;
+         }
+
+      }  // end while
 
    } else {
 
@@ -357,6 +376,7 @@ bool MPMT::ProcessData(void* data) {
    else if(card_type==2U) { // MPMT-FD card
       //printf("in send unsorted MPMT-FD card\n");
       msgs->m_data->unsorted_data[bin]->unsorted_hkmpmt_hits.insert(msgs->m_data->unsorted_data[bin]->unsorted_hkmpmt_hits.end(), vec_hkmpmt_hit.begin(), vec_hkmpmt_hit.end());
+      msgs->m_data->unsorted_data[bin]->unsorted_hkmpmt_pps.insert(msgs->m_data->unsorted_data[bin]->unsorted_hkmpmt_pps.end(), vec_hkmpmt_pps.begin(), vec_hkmpmt_pps.end());
       //printf("unsorted MPMT-FD card sent\n");
    }
 

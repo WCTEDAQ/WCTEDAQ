@@ -22,12 +22,14 @@
 #include "WCTERawData.h"
 #include "DAQHeader.h"
 #include "WCTEMPMTPPS.h"
-#include "UnsortedData.h"
 #include "VMEReadout.h"
 
 #include "HKMPMTHit.h"
+#include "HKMPMTPPS.h"
 #include "TDCHit.h"
 #include "QDCHit.h"
+
+#include "UnsortedData.h"
 
 using namespace ToolFramework;
 
