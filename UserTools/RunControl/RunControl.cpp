@@ -44,10 +44,10 @@ bool RunControl::Initialise(std::string configfile, DataModel &data){
   m_data->sc_vars.Add("RunStop",BUTTON, std::bind(&RunControl::RunStop, this,  std::placeholders::_1));
   m_data->sc_vars["RunStop"]->SetValue(0);
   m_data->sc_vars.Add("RunStart",COMMAND, std::bind(&RunControl::RunStart, this,  std::placeholders::_1));
-  m_data->sc_vars["SubRunStart"]->SetValue(0);
+  m_data->sc_vars["RunStart"]->SetValue(0);
   m_data->sc_vars.Add("SubRunStart",BUTTON, std::bind(&RunControl::SubRun, this,  std::placeholders::_1));
-  m_data->sc_vars["SubRubStart"]->SetValue(0);
-  
+  m_data->sc_vars["SubRunStart"]->SetValue(0);
+
   ExportConfiguration();
   
   return true;
