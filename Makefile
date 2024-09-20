@@ -1,8 +1,6 @@
 Dependencies=Dependencies
-#ToolFrameworkCore=$(Dependencies)/ToolFrameworkCore
-#ToolDAQFramework=$(Dependencies)/ToolDAQFramework
-ToolFrameworkCore=$(TOOLFW_BASEDIR)
-ToolDAQFramework=$(TOOLDAQ_BASEDIR)
+ToolFrameworkCore=$(Dependencies)/ToolFrameworkCore
+ToolDAQFramework=$(Dependencies)/ToolDAQFramework
 SOURCEDIR=`pwd`
 
 CXXFLAGS=  -fPIC -O3  -std=c++11 -Wno-comment # -Wpedantic -Wall -Wno-unused -Wextra -Wcast-align -Wcast-qual -Wctor-dtor-privacy -Wdisabled-optimization -Wformat=2 -Winit-self -Wlogical-op -Wmissing-declarations -Wmissing-include-dirs -Wnoexcept  -Woverloaded-virtual -Wredundant-decls -Wshadow -Wsign-conversion -Wsign-promo -Wstrict-null-sentinel -Wstrict-overflow=5 -Wswitch-default -Wundef #-Werror -Wold-style-cast 
@@ -13,7 +11,7 @@ CXXFLAGS+= -O0 -g -lSegFault -rdynamic -DDEBUG
 endif
 
 DataModelInclude = -I $(Dependencies)/caen/include
-DataModelLib = -L $(Dependencies)/caen/lib -lcaen++ -lCAENComm
+DataModelLib = -L $(Dependencies)/caen/lib -lcaen++ -lCAENComm -lCAENVME
 
 MyToolsInclude =
 MyToolsLib =
