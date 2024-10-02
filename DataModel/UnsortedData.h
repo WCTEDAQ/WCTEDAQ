@@ -8,6 +8,8 @@ std::vector<WCTEMPMTLED> unsorted_mpmt_leds;
 std::vector<WCTEMPMTWaveform> unsorted_mpmt_waveforms;
 std::vector<WCTEMPMTPPS> unsorted_mpmt_pps;
 std::vector<WCTEMPMTHit> unsorted_mpmt_triggers;
+std::vector<HKMPMTHit> unsorted_hkmpmt_hits;
+std::vector<HKMPMTPPS> unsorted_hkmpmt_pps;
 
 };
 
