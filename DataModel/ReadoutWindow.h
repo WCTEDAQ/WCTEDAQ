@@ -10,6 +10,7 @@
 #include <WCTEMPMTWaveform.h>
 #include <WCTEMPMTLED.h>
 #include <HKMPMTHit.h>
+#include <HKMPMTPPS.h>
 #include <TriggerType.h>
 #include <TDCHit.h>
 #include <QDCHit.h>
@@ -22,6 +23,7 @@ public:
   std::vector<WCTEMPMTHit> mpmt_hits;  
   std::vector<WCTEMPMTWaveform> mpmt_waveforms;
   std::vector<HKMPMTHit> hk_mpmt_hits;
+  std::vector<HKMPMTPPS> hk_mpmt_pps;
   std::vector<TDCHit> tdc_hits;
   std::vector<QDCHit> qdc_hits;
   unsigned long start_counter;
@@ -37,6 +39,8 @@ public:
     for(int i=0; i<mpmt_waveforms.size(); i++){std::cout<<"///["<<i<<"]///"<<std::endl; mpmt_waveforms.at(i).Print();}
     std::cout<<"/////////////////////////hk mpmt hits//////////////////"<<std::endl;
     for(int i=0; i<hk_mpmt_hits.size(); i++){ std::cout<<"///["<<i<<"]///"<<std::endl; hk_mpmt_hits.at(i).Print();}
+    std::cout<<"/////////////////////////hk mpmt pps//////////////////"<<std::endl;
+    for(int i=0; i<hk_mpmt_pps.size(); i++){ std::cout<<"///["<<i<<"]///"<<std::endl; hk_mpmt_pps.at(i).Print();}
     std::cout<<"/////////////////////////tdc data//////////////////"<<std::endl;
     for(int i=0; i<tdc_hits.size(); i++){std::cout<<"///["<<i<<"]///"<<std::endl; tdc_hits.at(i).Print();}
     std::cout<<"/////////////////////////qdc data//////////////////"<<std::endl;
@@ -53,6 +57,7 @@ public:
     bs & mpmt_hits;
     bs & mpmt_waveforms;
     bs & hk_mpmt_hits;
+    bs & hk_mpmt_pps;
     bs & tdc_hits;
     bs & qdc_hits;
 
