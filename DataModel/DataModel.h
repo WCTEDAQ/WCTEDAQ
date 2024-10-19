@@ -94,7 +94,9 @@ public:
 
   std::mutex monitoring_store_mtx;
   Store monitoring_store;
-  std::map<std::string, unsigned int> hitmap;
+  std::map<std::string, unsigned int> hit_map;
+  unsigned int qtc_transfer_num;
+  unsigned int adc_transfer_num;
 
   std::map<std::string, bool (*)(void*)> trigger_functions;
   std::map<std::string, Store*> trigger_vars;

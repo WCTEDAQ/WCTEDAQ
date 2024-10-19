@@ -11,7 +11,7 @@ class WCTEMPMTLED{
 
 public:
   WCTEMPMTLED(){std::fill(std::begin(data), std::end(data), 0);}
-  WCTEMPMTLED(unsigned short& in_card_id, char* in_data){ card_id=in_card_id; memcpy(&data[0], in_data, sizeof(data));}
+  WCTEMPMTLED(unsigned short& in_card_id, unsigned char* in_data){ card_id=in_card_id; memcpy(&data[0], in_data, sizeof(data));}
 
   unsigned short GetCardID(){return card_id;}
   unsigned short GetHeader(){return (data[0] & 0b11000000) >> 6; }

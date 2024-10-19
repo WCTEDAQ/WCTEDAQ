@@ -31,7 +31,8 @@ class Nhits: public Tool {
 
   bool LoadVariables();
   static bool NhitsAlgo(void* data);
-  
+
+  std::string m_configfile;
   unsigned int threshold;  
   unsigned int jump;
   unsigned int window_size;

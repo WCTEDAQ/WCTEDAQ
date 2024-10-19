@@ -134,7 +134,7 @@ bool RunControl::Execute(){
               
 	    }
     } catch(std::exception& e){
-        m_data->services->SendLog(e.what(), 0);
+        m_data->services->SendLog(e.what(), v_error);
         m_data->services->SendAlarm(e.what());
     }
   }
@@ -157,7 +157,6 @@ bool RunControl::Execute(){
   m_lapse = m_period_new_sub_run -( boost::posix_time::microsec_clock::universal_time() - (*m_start_time));
   if(m_lapse.is_negative()) SubRun("");
   
-  usleep(100);
   
   return true;
 }
@@ -184,7 +183,7 @@ void RunControl::Thread(Thread_args* arg){
   
   boost::posix_time::time_duration td = (boost::posix_time::microsec_clock::universal_time() - *(args->start_time));
 
-  *(args->current_coarse_counter)=td.total_milliseconds()*125000;
+  *(args->current_coarse_counter)=td.total_milliseconds()*125000; // gives the current time in 8ns
 
   usleep(1000);
   
@@ -197,18 +196,18 @@ std::string RunControl::RunStart(const char* key){
     return "Error: Already Starting new run";
   }
   if(m_data->running) RunStop("");
-  //  printf("hello : %s\n", key);
+  printf("hello : %s\n", key);
   
   std::string run_json="";
   m_data->sc_vars["RunStart"]->GetValue(run_json);
   m_data->sc_vars["RunStart"]->SetValue("command");
   Store run_info;
   run_info.JsonParser(run_json);
-  //run_info.Print();
+  run_info.Print();
   if(!run_info.Get("run_description",m_run_description)) m_run_description="NONE";
   if(!run_info.Get("run_configuration",m_data->run_configuration)){
     std::string errmsg = "ERROR "+m_tool_name+"::RunStart failed to get run_configuration for start of run from payload '"+run_json+"'";
-    m_data->services->SendLog(errmsg, 0);
+    m_data->services->SendLog(errmsg, v_error);
     m_data->services->SendAlarm(errmsg);
     return errmsg;
   }
@@ -218,7 +217,7 @@ std::string RunControl::RunStart(const char* key){
   bool ok = m_data->sc_vars.AlertSend("ChangeConfig", json_payload);
   if(!ok){
     std::string errmsg = "ERROR "+m_tool_name+"::RunStart failed to send ChangeConfig alert with payload '"+json_payload+"'";
-    m_data->services->SendLog(errmsg, 0);
+    m_data->services->SendLog(errmsg, v_error);
     m_data->services->SendAlarm(errmsg);
     return errmsg;
   }
@@ -240,7 +239,7 @@ std::string RunControl::RunStop(const char* key){
     bool ok = m_data->sc_vars.AlertSend("RunStop");
     if(!ok){
       std::string errmsg = "ERROR "+m_tool_name+"::RunStop failed to send RunStop alert";
-      m_data->services->SendLog(errmsg, 0);
+      m_data->services->SendLog(errmsg, v_error);
       m_data->services->SendAlarm(errmsg);
       return errmsg;
     }
@@ -257,7 +256,7 @@ std::string RunControl::RunStop(const char* key){
   bool ok = m_data->services->SQLQuery("daq",sql_query.str(), response);
   if(!ok){
     std::string errmsg = "ERROR "+m_tool_name+"::RunStop Failed to update end time of run with response '"+response+"'";
-    m_data->services->SendLog(errmsg, 0);
+    m_data->services->SendLog(errmsg, v_error);
     m_data->services->SendAlarm(errmsg);
     return errmsg;
   }
@@ -275,7 +274,7 @@ std::string RunControl::SubRun(const char* key){
   
   //update local variable and start time
   // FIXME if this function does not complete m_start_time will be incorrect, preventing automatic subrun rollover for another subrun period
-  *m_start_time= boost::posix_time::microsec_clock::universal_time() +  boost::posix_time::minutes(1); ///now+1min
+  *m_start_time= boost::posix_time::microsec_clock::universal_time() +  boost::posix_time::minutes(m_start_delay); ///now+1min
   unsigned long secs_since_epoch= boost::posix_time::time_duration(*m_start_time -  boost::posix_time::time_from_string("1970-01-01 00:00:00.000")).total_seconds();
   
   //update db
@@ -287,7 +286,7 @@ std::string RunControl::SubRun(const char* key){
   bool ok = m_data->services->SQLQuery("daq",sql_query.str(),response);
   if(!ok){
     std::string errmsg = "ERROR "+m_tool_name+"::SubRun Failed to make database entry for new subrun with response '"+response+"'";
-    m_data->services->SendLog(errmsg, 0);
+    m_data->services->SendLog(errmsg, v_error);
     m_data->services->SendAlarm(errmsg);
     return errmsg;
   }
@@ -304,7 +303,7 @@ std::string RunControl::SubRun(const char* key){
   
   m_new_sub_run=true;
   
-  m_data->services->SendLog("Run "+std::to_string(m_data->run_number)+ " SubRun "+std::to_string(m_data->sub_run_number)+" started", 0);
+  m_data->services->SendLog("Run "+std::to_string(m_data->run_number)+ " SubRun "+std::to_string(m_data->sub_run_number)+" started", v_error);
   return "New SubRun started";
   
 }
@@ -316,8 +315,12 @@ void RunControl::LoadConfig(){
   //put this in a load config funciton
   if(!m_variables.Get("verbose",m_verbose)) m_verbose=1;
   if(!m_variables.Get("config_update_time_sec",m_config_update_time_sec)) m_config_update_time_sec=30;
-  
-  m_period_new_sub_run=boost::posix_time::hours(12);
+  unsigned int sub_run_period=0;
+  if(!m_variables.Get("sub_run_period_hours",sub_run_period)) sub_run_period=30;
+  if(!m_variables.Get("run_start_delay_mins",m_start_delay)) m_start_delay=1;
+  std::cout<<"printing runcontrol variables"<<std::endl;
+  m_variables.Print();
+  m_period_new_sub_run=boost::posix_time::hours(sub_run_period);
   m_period_reconfigure=boost::posix_time::seconds(m_config_update_time_sec);
   
   ExportConfiguration();

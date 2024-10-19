@@ -29,6 +29,8 @@ class JobManager: public Tool {
 
  private:
 
+  void LoadConfig();
+  std::string m_configfile;
   unsigned int m_thread_cap;
   WorkerPoolManager* worker_pool_manager;
 

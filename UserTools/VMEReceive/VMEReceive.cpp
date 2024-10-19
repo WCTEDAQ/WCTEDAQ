@@ -32,6 +32,8 @@ bool VMEReceive::Initialise(std::string configfile, DataModel &data){
   m_util=new Utilities();
   args=new VMEReceive_args();
   args->data=m_data;
+  args->qdc_count = &qdc_count;
+  args->tdc_count = &tdc_count;
   args->sock=new zmq::socket_t(*m_data->context, ZMQ_DEALER);
   args->sock->connect(connection.str().c_str());
   args->items[0].socket=*args->sock;
@@ -53,6 +55,8 @@ bool VMEReceive::Initialise(std::string configfile, DataModel &data){
 
 bool VMEReceive::Execute(){
 
+  m_data->monitoring_store.Set("qdc_count", qdc_count);
+  m_data->monitoring_store.Set("tdc_count", tdc_count);
   return true;
 }
 
@@ -83,8 +87,14 @@ void VMEReceive::Thread(Thread_args* arg){
     
     std::istringstream iss(static_cast<char*>(msg_type.data()));    
     
-    if(iss.str()=="QDC") args->data->qdc_readout.Receive(args->sock);
-    else if(iss.str()=="TDC") args->data->tdc_readout.Receive(args->sock);
+    if(iss.str()=="QDC"){
+      args->data->qdc_readout.Receive(args->sock);
+      (*args->qdc_count)++;
+	}
+    else if(iss.str()=="TDC"){
+      args->data->tdc_readout.Receive(args->sock);
+      (*args->tdc_count)++;
+    }
     
   }
   

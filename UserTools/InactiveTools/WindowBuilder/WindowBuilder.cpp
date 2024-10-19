@@ -14,10 +14,10 @@ bool WindowBuilder::Initialise(std::string configfile, DataModel &data){
   InitialiseConfiguration(configfile);
   //m_variables.Print();
 
-  if(!m_variables.Get("verbose",m_verbose)) m_verbose=1;
 
   m_util=new Utilities();
   args=new WindowBuilder_args();
+  LoadConfig();
   
   m_util->CreateThread("test", &Thread, args);
 
@@ -28,6 +28,11 @@ bool WindowBuilder::Initialise(std::string configfile, DataModel &data){
 
 
 bool WindowBuilder::Execute(){
+
+  if(m_data->change_config){
+    LoadConfig();
+    ExportConfiguration();
+  }
   
   return true;
 }
@@ -69,8 +74,11 @@ void WindowBuilder::Thread(Thread_args* arg){
 
 
       //////////////////merging triggers//////////////////////////
-      ///  think i need to temporally sort these triggers first PLEASE DO THIS BEN!!!!!!!
-      
+      std::sort(it->second->unmerged_triggers.begin(), it->second->unmerged_triggers.end(), [](TriggerInfo a, TriggerInfo b)
+      {
+	return a.time < b.time;
+      });      
+
       std::vector<std::vector< unsigned int> >merged_triggers;
       std::map<unsigned int, bool> trigger_veto;
       
@@ -110,14 +118,14 @@ void WindowBuilder::Thread(Thread_args* arg){
 	  tmp_readout->triggers_info.push_back(it->second->unmerged_triggers.at(merged_triggers.at(i).at(j)));
 	  if( it->second->unmerged_triggers.at(merged_triggers.at(i).at(j)).time + args->offset_trigger[ it->second->unmerged_triggers.at(merged_triggers.at(i).at(j)).type] - args->pre_trigger[ it->second->unmerged_triggers.at(merged_triggers.at(i).at(j)).type] <min_time) min_time = it->second->unmerged_triggers.at(merged_triggers.at(i).at(j)).time + args->offset_trigger[ it->second->unmerged_triggers.at(merged_triggers.at(i).at(j)).type] + args->pre_trigger[ it->second->unmerged_triggers.at(merged_triggers.at(i).at(j)).type]; 
 	  if( it->second->unmerged_triggers.at(merged_triggers.at(i).at(j)).time + args->offset_trigger[ it->second->unmerged_triggers.at(merged_triggers.at(i).at(j)).type] + args->post_trigger[ it->second->unmerged_triggers.at(merged_triggers.at(i).at(j)).type] > max_time) max_time = it->second->unmerged_triggers.at(merged_triggers.at(i).at(j)).time + args->offset_trigger[ it->second->unmerged_triggers.at(merged_triggers.at(i).at(j)).type] + args->post_trigger[ it->second->unmerged_triggers.at(merged_triggers.at(i).at(j)).type];
-      
+	  
 	}
 	
 	tmp_readout->start_counter=min_time;
 	tmp_readout->readout_num=args->data->readout_num;
 	args->data->readout_num++;
 	/////////////////////////////////////////////
-
+	
 	///////////////////////// collecting mpmt_hits//////////////////////
 	std::vector<WCTEMPMTHit>::iterator start_hit;
 	std::vector<WCTEMPMTHit>::iterator stop_hit;
@@ -131,7 +139,7 @@ void WindowBuilder::Thread(Thread_args* arg){
 	    size++;
 	  }
 	}
-
+	
 	tmp_readout->mpmt_hits.resize(size);
 	std::memcpy(tmp_readout->mpmt_hits.data(), it->second->mpmt_hits.data(), sizeof(it->second->mpmt_hits.data()));
 	/////////////////////////////////////////////////////////////////////////////
@@ -194,4 +202,114 @@ void WindowBuilder::Thread(Thread_args* arg){
   
   erase_list.clear();
   
+}
+
+void LoadConfig(){
+
+    if(!m_variables.Get("verbose",m_verbose)) m_verbose=1;
+
+    args->pre_trigger.clear();
+    args->post_trigger.clear();
+    args->offset_trigger.clear();
+    
+    bool beamelec=false;
+    unsigned long beamelec_pre_trigger=0;
+    unsigned long beamelec_post_trigger=0;
+    unsigned long beamelec_offset_trigger=0;
+    m_variables.Get("beamelec", beamelec);
+    m_variables.Get("beamelec_pre_trigger", beamelec_pre_trigger);
+    m_variables.Get("beamelec_post_trigger", beamelec_post_trigger);
+    m_variables.Get("beamelec_offset_trigger", beamelec_offset_trigger);
+    if(beamelec){
+      args->pre_trigger[TriggerInfo::EBEAM]=beamelec_pre_trigger;
+      args->post_trigger[TriggerInfo::EBEAM]=beamelec_post_trigger;
+      args->offset_trigger[TriggerInfo::EBEAM]=beamelec_offset_trigger;
+    }
+
+    
+    bool beammu=false;
+    unsigned long beammu_pre_trigger=0;
+    unsigned long beammu_post_trigger=0;
+    unsigned long beammu_offset_trigger=0;
+    m_variables.Get("beamelec", beammu);
+    m_variables.Get("beammu_pre_trigger", beammu_pre_trigger);
+    m_variables.Get("beammu_post_trigger", beammu_post_trigger);
+    m_variables.Get("beammu_offset_trigger", beammu_offset_trigger);
+    if(beammu){
+      args->pre_trigger[TriggerInfo::MBEAM]=beammu_pre_trigger;
+      args->post_trigger[TriggerInfo::MBEAM]=beammu_post_trigger;
+      args->offset_trigger[TriggerInfo::MBEAM]=beammu_offset_trigger;
+    }
+    
+    bool led=false;
+    unsigned long led_pre_trigger=0;
+    unsigned long led_post_trigger=0;
+    unsigned long led_offset_trigger=0;
+    m_variables.Get("led", led);
+    m_variables.Get("led_pre_trigger", led_pre_trigger);
+    m_variables.Get("led_post_trigger", led_post_trigger);
+    m_variables.Get("led_offset_trigger", led_offset_trigger);
+    if(led){
+      args->pre_trigger[TriggerInfo::LED]=led_pre_trigger;
+      args->post_trigger[TriggerInfo::LED]=led_post_trigger;
+      args->offset_trigger[TriggerInfo::LED]=led_offset_trigger;
+    }
+    
+    bool laser=false;
+    unsigned long laser_pre_trigger=0;
+    unsigned long laser_post_trigger=0;
+    unsigned long laser_offset_trigger=0;
+    m_variables.Get("laser", laser);
+    m_variables.Get("laser_pre_trigger", laser_pre_trigger);
+    m_variables.Get("laser_post_trigger", laser_post_trigger);
+    m_variables.Get("laser_offset_trigger", laser_offset_trigger);
+    if(laser){
+      args->pre_trigger[TriggerInfo::LASER]=laser_pre_trigger;
+      args->post_trigger[TriggerInfo::LASER]=laser_post_trigger;
+      args->offset_trigger[TriggerInfo::LASER]=laser_offset_trigger;
+    }
+    
+    bool none=false;
+    unsigned long none_pre_trigger=0;
+    unsigned long none_post_trigger=0;
+    unsigned long none_offset_trigger=0;
+    m_variables.Get("none", none);
+    m_variables.Get("none_pre_trigger", none_pre_trigger);
+    m_variables.Get("none_post_trigger", none_post_trigger);
+    m_variables.Get("none_offset_trigger", none_offset_trigger);
+    if(none){
+      args->pre_trigger[TriggerInfo::NONE]=none_pre_trigger;
+      args->post_trigger[TriggerInfo::NONE]=none_post_trigger;
+      args->offset_trigger[TriggerInfo::NONE]=none_offset_trigger;
+    }
+
+    bool nhits=false;
+    unsigned long nhits_pre_trigger=0;
+    unsigned long nhits_post_trigger=0;
+    unsigned long nhits_offset_trigger=0;
+    m_variables.Get("nhits", nhits);
+    m_variables.Get("nhits_pre_trigger", nhits_pre_trigger);
+    m_variables.Get("nhits_post_trigger", nhits_post_trigger);
+    m_variables.Get("nhits_offset_trigger", nhits_offset_trigger);
+    if(nhits){
+      args->pre_trigger[TriggerInfo::NHITS]=nhits_pre_trigger;
+      args->post_trigger[TriggerInfo::NHITS]=nhits_post_trigger;
+      args->offset_trigger[TriggerInfo::NHITS]=nhits_offset_trigger;
+    }
+
+    bool hard6=false;
+    unsigned long hard6_pre_trigger=0;
+    unsigned long hard6_post_trigger=0;
+    unsigned long hard6_offset_trigger=0;
+    m_variables.Get("hard6", hard6);
+    m_variables.Get("hard6_pre_trigger", hard6_pre_trigger);
+    m_variables.Get("hard6_post_trigger", hard6_post_trigger);
+    m_variables.Get("hard6_offset_trigger", hard6_offset_trigger);
+    if(hard6){
+      args->pre_trigger[TriggerInfo::HARD6]=hard6_pre_trigger;
+      args->post_trigger[TriggerInfo::HARD6]=hard6_post_trigger;
+      args->offset_trigger[TriggerInfo::HARD6]=hard6_offset_trigger;
+    }
+
+    
 }

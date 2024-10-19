@@ -9,7 +9,7 @@
 
 class DataModel;
 
-enum class TriggerType{ LASER, NHITS, LED, BEAM, MBEAM, EBEAM, NONE, HARD6 };
+enum class TriggerType{ LASER, NHITS, LED, MAIN, MBEAM, EBEAM, NONE, HARD6 };
 
 class TriggerInfo : public SerialisableObject{
 
