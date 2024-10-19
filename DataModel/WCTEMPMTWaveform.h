@@ -24,7 +24,7 @@ public:
   unsigned short GetFlags(){return ((data[0] & 0b00111100) >> 2 );}
   unsigned int GetCoarseCounter(){ return ((data[0] & 0b00000011) << 30 ) | (data[1] << 22) |  (data[2] << 14) | (data[3] << 6) | ((data[4] & 0b11111100) >> 2); }
   unsigned short GetChannel(){return  ((data[4] & 0b00000011) << 3) | ((data[5] & 0b11100000) >> 5 );}
-  unsigned short GetNumSamples(){return ((data[5] & 0b00011111) << 11 ) | (data[6] << 3) |  ((data[7] & 0b11100000) >> 5);}
+  unsigned short GetNumSamples(){return (( data[5] & 0b00011111) << 11 ) | ( data[6] << 3) |  (( data[7] & 0b11100000) >> 5);}
   unsigned int GetLength(){ return ((data[7] & 0b00011111) << 12 ) | (data[8] << 4) |  ((data[9] & 0b11110000) >> 4); }
   unsigned short GetReserved(){return (data[9] & 0b00001111);}
   static unsigned int GetSize(){return sizeof(data);};
@@ -57,6 +57,13 @@ public:
   }
   void SetReserved(unsigned short in){data[9] = (data[9] & 0b11110000) | (in & 0b00001111) ; }
   void Print(){
+        printf("header = %u\n",GetHeader());
+	printf("flags = %u\n",GetFlags());
+	printf("coarse_counter = %u\n",GetCoarseCounter());
+	printf("channel = %u\n",GetChannel());
+	printf("num_samples = %u\n",GetNumSamples());
+	printf("length = %u\n",GetLength());
+	printf("reserved = %u\n",GetReserved());
     std::cout<<"header = "<<GetHeader()<<std::endl;
     std::cout<<"flags = "<<GetFlags()<<std::endl;
     std::cout<<"coarse_counter = "<<GetCoarseCounter()<<std::endl;
@@ -70,8 +77,8 @@ public:
   
 private:
 
-  unsigned short card_id;
   unsigned char data[10];
+  unsigned short card_id;
   
 };
 
@@ -89,16 +96,25 @@ class WCTEMPMTWaveform : public SerialisableObject {
 public:
   
   WCTEMPMTWaveform(){samples.clear();}
-  WCTEMPMTWaveform(unsigned short& in_card_id, char* in_data){
+  WCTEMPMTWaveform(unsigned short& in_card_id, unsigned char* in_data){
+    printf("n1\n");
     samples.clear();
+    printf("n2\n");
     header.SetCardID(in_card_id);
-    memcpy(header.GetData(), in_data, sizeof(header.GetSize()));
+    printf("n3\n");
+    memcpy(header.GetData(), &in_data[0], sizeof(header.GetSize()));
+    printf("n4\n");
     samples.resize(header.GetNumSamples());
-    memcpy(samples.data(), (in_data+10), sizeof(samples.data())); //pretty sure this wont work
+    printf("n5%u\n",sizeof(samples.data()));
+    printf("n5b %u\n",header.GetNumSamples());
+     printf("n5c %u\n",header.GetLength());
+     header.Print();
+    if(header.GetNumSamples()!=0) memcpy(samples.data(), &in_data[10], sizeof(samples.data())); 
+    printf("n6\n");
   }
     
   WCTEMPMTWaveformHeader header;
-  std::vector<char> samples;
+  std::vector<unsigned char> samples;
 
   bool Print(){
 

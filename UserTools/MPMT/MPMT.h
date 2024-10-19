@@ -79,7 +79,9 @@ class MPMT: public Tool {
 
   unsigned int m_freethreads; ///< Keeps track of free threads
   unsigned long m_threadnum; ///< Counter for unique naming of threads
-
+  std::string m_mpmt_port;
+  unsigned int m_mpmt_search_period_sec;
+  
   static bool ProcessData(void* data);
   //static WCTEMPMTHit ProcessMPMTHit(char* data, unsinged long& start);
   //static WCTEMPMTWaveform ProcessMPMTWaveForm(void* data);

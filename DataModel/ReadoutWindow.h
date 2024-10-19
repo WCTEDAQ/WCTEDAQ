@@ -22,6 +22,8 @@ public:
   std::vector<WCTEMPMTHit> mpmt_hits;  
   std::vector<WCTEMPMTWaveform> mpmt_waveforms;
   std::vector<HKMPMTHit> hk_mpmt_hits;
+   std::vector<WCTEMPMTHit> extra_hits;
+  std::vector<WCTEMPMTWaveform> extra_waveforms;
   std::vector<TDCHit> tdc_hits;
   std::vector<QDCHit> qdc_hits;
   unsigned long start_counter;
@@ -53,6 +55,8 @@ public:
     bs & mpmt_hits;
     bs & mpmt_waveforms;
     bs & hk_mpmt_hits;
+    bs & extra_hits;
+    bs & extra_waveforms;
     bs & tdc_hits;
     bs & qdc_hits;
 

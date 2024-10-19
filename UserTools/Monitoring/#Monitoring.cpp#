@@ -11,7 +11,6 @@ Monitoring::Monitoring():Tool(){}
 bool Monitoring::Initialise(std::string configfile, DataModel &data){
 
   InitialiseTool(data);
-  m_configfile=configfile;
   InitialiseConfiguration(configfile);
   //m_variables.Print();
 
@@ -36,9 +35,8 @@ bool Monitoring::Initialise(std::string configfile, DataModel &data){
 bool Monitoring::Execute(){
 
   if(m_data->change_config){
-    InitialiseConfiguration(m_configfile);
+    InitialiseConfiguration();
     LoadConfig();
-    ExportConfiguration();
   }
   
   return true;
@@ -70,16 +68,12 @@ void Monitoring::Thread(Thread_args* arg){
     return;
   }
     //printf("in runstart lapse\n");
-    
+  
     std::string json="";
     args->data->monitoring_store_mtx.lock();
     args->data->monitoring_store>>json;
     args->data->monitoring_store_mtx.unlock();
     args->data->services->SendMonitoringData(json);
-
-
-    /// send data to monitoring toolcahin
-    
     
     args->last = boost::posix_time::microsec_clock::universal_time();
     

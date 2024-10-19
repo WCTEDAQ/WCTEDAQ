@@ -10,8 +10,8 @@
 #include <Nhits.h>
 #include <RunControl.h>
 #include <SlaveRunControl.h>
-#include <Sorting.h>
-#include <Trigger.h>
+#include <Sorting2.h>
+#include <Trigger2.h>
 #include <V1290.h>
 #include <V1495.h>
 #include <V792.h>
@@ -19,5 +19,5 @@
 #include <VMEReceive.h>
 #include <VMESend.h>
 #include <VMETest.h>
-#include <WindowBuilder.h>
+#include <WindowBuilder2.h>
 #include <HKMPMT.h>

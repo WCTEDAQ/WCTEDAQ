@@ -21,6 +21,7 @@ FileWriter::FileWriter():Tool(){}
 bool FileWriter::Initialise(std::string configfile, DataModel &data){
 
   InitialiseTool(data);
+  m_configfile=configfile;
   InitialiseConfiguration(configfile);
   //m_variables.Print();
 
@@ -44,10 +45,14 @@ bool FileWriter::Initialise(std::string configfile, DataModel &data){
 
 bool FileWriter::Execute(){
 
-  if(m_data->change_config) InitialiseConfiguration(); // surely add load config here   need to do return checks.
- if(m_data->run_start) LoadConfig();   ///?   oh maybe to ensure file file written before load config happends but this is a crap way of doing it please change Ben
- if(m_data->run_stop) args->period=boost::posix_time::seconds(0);
- 
+  if(m_data->change_config){
+    InitialiseConfiguration(m_configfile); // surely add load config here   need to do return checks.
+    
+    ExportConfiguration();
+  }
+  if(m_data->run_start) LoadConfig();   ///?   oh maybe to ensure file file written before load config happends but this is a crap way of doing it please change Ben
+  if(m_data->run_stop) args->period=boost::posix_time::seconds(0);
+  
   return true;
 }
 
@@ -120,7 +125,7 @@ void FileWriter::LoadConfig(){ // change to bool have a return type
 
   
   if(!m_variables.Get("verbose",m_verbose)) m_verbose=1;
-  if(!m_variables.Get("file_name",m_file_name)) m_file_name="./data";
+  if(!m_variables.Get("file_path",m_file_name)) m_file_name="./data";
   if(!m_variables.Get("file_writeout_period",m_file_writeout_period)) m_file_writeout_period=300;
   
   m_part_number=0;

@@ -23,7 +23,8 @@ struct VMEReceive_args:Thread_args{
   DataModel* data;
   zmq::socket_t* sock;
   zmq::pollitem_t items[2];
-
+  unsigned long* qdc_count;
+  unsigned long* tdc_count;
   
 };
 
@@ -52,6 +53,8 @@ class VMEReceive: public Tool {
   static void Thread(Thread_args* arg); ///< Function to be run by the thread in a loop. Make sure not to block in it
   Utilities* m_util;  ///< Pointer to utilities class to help with threading
   VMEReceive_args* args; ///< thread args (also holds pointer to the thread)
+  unsigned long qdc_count;
+  unsigned long tdc_count;
 
 };
 

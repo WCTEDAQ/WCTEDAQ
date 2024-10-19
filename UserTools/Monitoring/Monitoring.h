@@ -52,6 +52,7 @@ class Monitoring: public Tool {
 
   bool LoadConfig();
   static void Thread(Thread_args* arg); ///< Function to be run by the thread in a loop. Make sure not to block in it
+  std::string m_configfile;
   Utilities* m_util;  ///< Pointer to utilities class to help with threading
   Monitoring_args* args; ///< thread args (also holds pointer to the thread)
   
