@@ -102,15 +102,17 @@ public:
     printf("n2\n");
     header.SetCardID(in_card_id);
     printf("n3\n");
-    memcpy(header.GetData(), &in_data[0], sizeof(header.GetSize()));
+    memcpy(header.GetData(), &in_data[0], header.GetSize());
     printf("n4\n");
-    samples.resize(header.GetNumSamples());
-    printf("n5%u\n",sizeof(samples.data()));
-    printf("n5b %u\n",header.GetNumSamples());
-     printf("n5c %u\n",header.GetLength());
-     header.Print();
-    if(header.GetNumSamples()!=0) memcpy(samples.data(), &in_data[10], sizeof(samples.data())); 
-    printf("n6\n");
+    if(header.GetLength()!=0){
+      samples.resize(header.GetLength());
+      printf("n5%u\n",sizeof(samples.data()));
+      printf("n5b %u\n",header.GetNumSamples());
+      printf("n5c %u\n",header.GetLength());
+      header.Print();
+      memcpy(samples.data(), &in_data[10], sizeof(samples.data())); 
+      printf("n6\n");
+    }
   }
     
   WCTEMPMTWaveformHeader header;

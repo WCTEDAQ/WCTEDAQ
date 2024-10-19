@@ -288,7 +288,7 @@ bool MPMT::ProcessData(void* data){
   unsigned char* mpmt_data= reinterpret_cast<unsigned char*>(msgs->mpmt_data->data());
   //printf("data size %d\n",msgs->mpmt_data->size());
    printf("d4\n");
-  while(current_byte<bytes){
+  while(current_byte<bytes && (bytes-current_byte)>8){
     printf("d5 curent:total= %d:%d\n", current_byte, bytes);
     //printf("cuurent byte %d : %d\n",mpmt_data[current_byte], (mpmt_data[current_byte] >> 6));
     //printf("(mpmt_data[current_byte] >> 6) == 0b1:%d\n", ((mpmt_data[current_byte] >> 6) == 0b1));
@@ -346,24 +346,26 @@ bool MPMT::ProcessData(void* data){
        printf("k0\n");
       WCTEMPMTWaveform tmp(card_id, &mpmt_data[current_byte]);
        printf("k1\n");
-       current_byte+=  WCTEMPMTWaveformHeader::GetSize();
+       current_byte+=  WCTEMPMTWaveformHeader::GetSize() + tmp.header.GetLength();
        printf("k2\n");
-	   if(bytes-current_byte >= tmp.header.GetLength()){
-	     printf("k3\n");
-	     tmp.samples.resize(tmp.header.GetLength());
-	     printf("k4\n");
-	     memcpy(tmp.samples.data(), &mpmt_data[current_byte], tmp.header.GetLength());
-	     printf("k5\n");
-	     current_byte+=(tmp.header.GetLength());
-	     printf("k6\n");
-	     UWCTEMPMTWaveformHeader* tmp2 = reinterpret_cast<UWCTEMPMTWaveformHeader*>(&(tmp.header));
-	     std::stringstream hello;
-	     hello<<tmp2->bits;
-	     printf("k6.5 %s\n",hello.str().c_str());
-	     vec_mpmt_waveform.push_back(tmp);
-	     printf("k7\n");
-	   }
-	   
+       /*
+       if(bytes-current_byte >= tmp.header.GetLength()){
+	 printf("k3\n");
+	 tmp.samples.resize(tmp.header.GetLength());
+	 printf("k4\n");
+	 memcpy(tmp.samples.data(), &mpmt_data[current_byte], tmp.header.GetLength());
+	 printf("k5\n");
+	 current_byte+=(tmp.header.GetLength());
+	 printf("k6\n");
+	 UWCTEMPMTWaveformHeader* tmp2 = reinterpret_cast<UWCTEMPMTWaveformHeader*>(&(tmp.header));
+	 std::stringstream hello;
+	 hello<<tmp2->bits;
+	 printf("k6.5 %s\n",hello.str().c_str());
+	 vec_mpmt_waveform.push_back(tmp);
+	 printf("k7\n");
+       }
+       */
+     vec_mpmt_waveform.push_back(tmp); 
     }
     else{
       printf("currentbyte=%u\n",current_byte);
