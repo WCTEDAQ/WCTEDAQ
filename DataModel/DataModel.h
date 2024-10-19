@@ -25,6 +25,8 @@
 #include "MPMTData.h"
 #include "VMEReadout.h"
 
+#include "HKMPMTHit.h"
+#include "HKMPMTPPS.h"
 #include "TDCHit.h"
 #include "QDCHit.h"
 
