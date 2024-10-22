@@ -10,8 +10,7 @@ void V1290::RawEvent::merge(RawEvent& event, bool tail) {
   else
     header  = event.header;
   if (ettt == 0) ettt = event.ettt;
-  memcpy(hits + nhits, event.hits, event.nhits * sizeof(*hits));
-  nhits += event.nhits;
+  hits.insert(hits.end(), event.hits.begin(), event.hits.end());
 };
 
 bool V1290::chop_event(size_t cycle, RawEvent& event, bool head) {
@@ -334,17 +333,29 @@ void V1290::process(
 
   RawEvent event;
   event.ettt  = 0;
-  event.nhits = 0;
+  auto copy_hits = [&](
+      std::vector<caen::V1290::Packet>::const_iterator header,
+      std::vector<caen::V1290::Packet>::const_iterator trailer,
+      unsigned nhits
+  ) {
+    event.hits.resize(nhits);
+    unsigned i = 0;
+    for (auto packet = header == tdc_data.end() ? tdc_data.begin() : header + 1;
+         packet != trailer;
+         ++packet)
+      if (packet->type() == caen::V1290::Packet::TDCMeasurement)
+        event.hits[i++] = packet->as<caen::V1290::TDCMeasurement>();
+  };
 
-  auto packet = tdc_data.begin();
-  bool chop = false;
-  for (; packet != tdc_data.end(); ++packet)
+  unsigned nhits = 0;
+  auto header = tdc_data.end();
+  for (auto packet = tdc_data.begin(); packet != tdc_data.end(); ++packet)
     switch (packet->type()) {
       case caen::V1290::Packet::GlobalHeader:
+        header = packet;
+        nhits  = 0;
         event.header = packet->as<caen::V1290::GlobalHeader>();
         event.ettt   = 0;
-        event.nhits  = 0;
-        chop = true;
         break;
 
       case caen::V1290::Packet::TDCError:
@@ -356,18 +367,22 @@ void V1290::process(
         break;
 
       case caen::V1290::Packet::TDCMeasurement:
-        event.hits[event.nhits++] = packet->as<caen::V1290::TDCMeasurement>();
+        ++nhits;
         break;
 
       case caen::V1290::Packet::GlobalTrailer:
-        if (chop || chop_event(cycle, event, false))
+        copy_hits(header, packet, nhits);
+        if (header != tdc_data.end() || chop_event(cycle, event, false))
           process(get_event, event);
-        chop = false;
+        header = tdc_data.end();
         break;
-    };
+    }
 
-  if (chop && chop_event(cycle + 1, event, true))
-    process(get_event, event);
+  if (header != tdc_data.end()) {
+    copy_hits(header, tdc_data.end(), nhits);
+    if (chop_event(cycle + 1, event, true))
+      process(get_event, event);
+  };
 };
 
 void V1290::process(
@@ -375,14 +390,9 @@ void V1290::process(
     RawEvent& raw_event
 ) {
   Event& event = get_event(raw_event.header.event());
-  for (int h = 0; h < raw_event.nhits; ++h)
+  for (auto& hit : raw_event.hits)
     event.push_back(
-        TDCHit(
-          raw_event.header,
-          raw_event.hits[h],
-          raw_event.ettt,
-          raw_event.trailer
-        )
+        TDCHit(raw_event.header, hit, raw_event.ettt, raw_event.trailer)
     );
 };
 

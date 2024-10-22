@@ -19,11 +19,10 @@ class V1290: public Digitizer<caen::V1290::Packet, TDCHit> {
     };
 
     struct RawEvent {
-      caen::V1290::GlobalHeader           header;
-      caen::V1290::GlobalTrailer          trailer;
-      caen::V1290::ExtendedTriggerTimeTag ettt;
-      caen::V1290::TDCMeasurement         hits[32];
-      int                                 nhits;
+      caen::V1290::GlobalHeader                header;
+      caen::V1290::GlobalTrailer               trailer;
+      caen::V1290::ExtendedTriggerTimeTag      ettt;
+      std::vector<caen::V1290::TDCMeasurement> hits;
 
       void merge(RawEvent& event, bool tail);
     };
