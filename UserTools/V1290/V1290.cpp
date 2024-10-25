@@ -314,13 +314,13 @@ void V1290::fini() {
 };
 
 void V1290::start_acquisition() {
+  chops.clear();
   for (auto& board : boards) board.tdc.clear();
   Digitizer<caen::V1290::Packet, TDCHit>::start_acquisition();
 };
 
 void V1290::stop_acquisition() {
   Digitizer<caen::V1290::Packet, TDCHit>::stop_acquisition();
-  chops.clear();
 };
 
 void V1290::process(
