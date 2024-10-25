@@ -1,6 +1,6 @@
 This tool operates with CAEN V1290 time to digital converters. The tool connects
 to a number of V1290s, reads them out sequentially and stores the data in
-`DataModel::v1290_readout` for further processing. Readout is performed by
+`DataModel::tdc_readout` for further processing. Readout is performed by
 continuous polling of the cards.
 
 * `V1290::Initialise` connects to and configures the cards.

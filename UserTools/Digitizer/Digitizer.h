@@ -55,8 +55,7 @@ class Digitizer: public ToolFramework::Tool {
 
     // Processes the data read from board `board_index`. The data shall be
     // converted to hits and stored in the result of `get_event` which takes an
-    // event number and returns a vector of hits, one hit per channel for all
-    // channels of all boards.
+    // event number and returns a vector of hits.
     // This method if called from the worker job queues
     virtual void process(
       size_t                                  cycle,
@@ -89,7 +88,7 @@ class Digitizer: public ToolFramework::Tool {
     // for cycles[i].second: both the previous cycles and the next cycle have
     //                       been processed.
     // cycles[i].second is the largest event number seen during processing of this cycle.
-    // cycles[i].first the smallest event number across largest event number per board.
+    // cycles[i].first is the smallest event number across largest event number per board.
     std::map<size_t, std::pair<uint32_t, uint32_t>> cycles;
     std::mutex cycles_mutex;
 

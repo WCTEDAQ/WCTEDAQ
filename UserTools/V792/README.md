@@ -1,6 +1,6 @@
 This tool operates with CAEN V792 charge to digital converters. The tool
 connects to a number of V792s, reads them out sequentially and stores the data
-in `DataModel::v792_readout` for further processing. Readout is performed by
+in `DataModel::qdc_readout` for further processing. Readout is performed by
 continuous polling of the cards.
 
 * `V792::Initialise` connects to and configures the cards.
