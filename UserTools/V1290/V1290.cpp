@@ -13,18 +13,6 @@ void V1290::RawEvent::merge(RawEvent& event, bool tail) {
   hits.insert(hits.end(), event.hits.begin(), event.hits.end());
 };
 
-bool V1290::chop_event(size_t cycle, RawEvent& event, bool head) {
-  std::lock_guard<std::mutex> lock(chops_mutex);
-  auto pevent = chops.lower_bound(cycle);
-  if (pevent == chops.end() || pevent->first != cycle) {
-    chops.insert(pevent, { cycle, event });
-    return false;
-  };
-  event.merge(pevent->second, head);
-  chops.erase(pevent);
-  return true;
-};
-
 void V1290::connect() {
   auto connections = caen_connections(m_variables);
   boards.reserve(connections.size());
@@ -372,7 +360,7 @@ void V1290::process(
 
       case caen::V1290::Packet::GlobalTrailer:
         copy_hits(header, packet, nhits);
-        if (header != tdc_data.end() || chop_event(cycle, event, false))
+        if (header != tdc_data.end() || chops.chop_event(cycle, event, false))
           process(get_event, event);
         header = tdc_data.end();
         break;
@@ -380,7 +368,7 @@ void V1290::process(
 
   if (header != tdc_data.end()) {
     copy_hits(header, tdc_data.end(), nhits);
-    if (chop_event(cycle + 1, event, true))
+    if (chops.chop_event(cycle + 1, event, true))
       process(get_event, event);
   };
 };

@@ -22,6 +22,17 @@ class Digitizer: public ToolFramework::Tool {
   protected:
     using Event = std::vector<Hit>;
 
+    template <typename RawEvent>
+    class Chops {
+      public:
+        bool chop_event(size_t cycle, RawEvent& event, bool head);
+        void clear() { chops.clear(); };
+
+      private:
+        std::map<size_t, RawEvent> chops;
+        std::mutex                 mutex;
+    };
+
     // Connects and configures the boards. Returns the number of boards and a
     // pointer to VMEReadout object to store data in. This method is called
     // from Initialise and is wrapped in a try-catch block.
@@ -94,6 +105,22 @@ class Digitizer: public ToolFramework::Tool {
         typename std::map<uint32_t, Event>::iterator end
     );
 
+};
+
+template <typename Packet, typename Hit>
+template <typename RawEvent>
+bool Digitizer<Packet, Hit>::Chops<RawEvent>::chop_event(
+    size_t cycle, RawEvent& event, bool head
+) {
+  std::lock_guard<std::mutex> lock(mutex);
+  auto pevent = chops.lower_bound(cycle);
+  if (pevent == chops.end() || pevent->first != cycle) {
+    chops.insert(pevent, { cycle, event });
+    return false;
+  };
+  event.merge(pevent->second, head);
+  chops.erase(pevent);
+  return true;
 };
 
 template <typename Packet, typename Hit>

@@ -27,11 +27,10 @@ class V1290: public Digitizer<caen::V1290::Packet, TDCHit> {
       void merge(RawEvent& event, bool tail);
     };
 
-    std::vector<Board> boards;
-    std::mutex tdc_errors_mutex;
+    std::vector<Board>  boards;
+    std::mutex          tdc_errors_mutex;
     caen::V1290::Buffer buffer;
-    std::map<size_t, RawEvent> chops;
-    std::mutex chops_mutex;
+    Chops<RawEvent>     chops;
 
     bool chop_event(size_t cycle, RawEvent&, bool head);
 
