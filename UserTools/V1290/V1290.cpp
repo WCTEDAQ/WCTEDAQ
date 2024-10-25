@@ -405,17 +405,87 @@ void V1290::readout(
 };
 
 void V1290::report_error(unsigned tdc_index, caen::V1290::TDCError error) {
-  auto flags = error.errors();
-  volatile auto& reported = boards[tdc_index].errors;
+  uint16_t flags = error.errors();
+  volatile uint16_t& reported = boards[tdc_index].errors;
   if ((reported & flags) == flags) return;
   std::lock_guard<std::mutex> lock(tdc_errors_mutex);
   if ((reported & flags) == flags) return;
+  uint16_t unreported = flags & ~reported;
+  reported |= flags;
   *m_log
     << ML(0)
     << "V1290 " << tdc_index
-    << " reports error 0x" << std::hex << flags << std::dec
+    << " reports error 0x" << std::hex << unreported << std::dec
     << " in TDC " << static_cast<int>(error.tdc())
-    << std::endl;
-  // TODO: send alert
-  reported |= flags;
+    << ": ";
+
+  bool comma_ = false;
+  auto comma = [&]() mutable {
+    if (comma_)
+      *m_log << ", ";
+    else
+      comma_ = true;
+  };
+
+  auto report_group_errors = [&](
+      unsigned    bit,
+      const char* singular,
+      const char* plural,
+      const char* reason
+  ) {
+    int groups[4];
+    int n = 0;
+    for (int group = 0; group < 4; ++group)
+      if (unreported & 1 << 3 * group + bit)
+        groups[n++] = group;
+    if (n == 0) return;
+
+    comma();
+
+    *m_log << (n == 1 ? singular : plural);
+    bool comma2 = false;
+    for (int i = 0; i < n; ++i) {
+      if (comma2)
+        *m_log << ", ";
+      else
+        comma2 = true;
+      *m_log << groups[i];
+    };
+    *m_log << reason;
+  };
+
+  report_group_errors(
+      0,
+      "hit lost in group ",
+      "hits lost in groups ",
+      " due to readout FIFO overflow"
+  );
+  report_group_errors(
+      1,
+      "hit lost in group ",
+      "hits lost in groups ",
+      " due to L1 buffer overflow"
+  );
+  report_group_errors(
+      2,
+      "hit error has been detected in group ",
+      "hits errors have been detected in groups ",
+      ""
+  );
+
+  if (unreported & 1 << 12) {
+    comma();
+    *m_log << "hits rejected because of programmed event size limit";
+  };
+
+  if (unreported & 1 << 13) {
+    comma();
+    *m_log << "event lost due to trigger FIFO overflow";
+  };
+
+  if (unreported & 1 << 14) {
+    comma();
+    *m_log << "internal fatal chip error has been detected";
+  };
+  // TODO: send alarm
 };
