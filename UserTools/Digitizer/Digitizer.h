@@ -70,6 +70,7 @@ class Digitizer: public ToolFramework::Tool {
       size_t                           cycle;
     };
 
+    bool     standalone     = false;
     bool     acquiring_     = false;
     unsigned nboards        = 0;
     VMEReadout<Hit>* output = nullptr;
@@ -309,6 +310,7 @@ bool Digitizer<Packet, Hit>::Initialise(std::string configfile, DataModel& data)
     InitialiseConfiguration(std::move(configfile));
 
     if (!m_variables.Get("verbose", m_verbose)) m_verbose = 1;
+    m_variables.Get("standalone", standalone);
 
     init(nboards, output);
     readout_cycle = 0;
@@ -332,6 +334,12 @@ template <typename Packet, typename Hit>
 bool Digitizer<Packet, Hit>::Execute() {
   if (nboards == 0) return true;
   try {
+    if (standalone) {
+      if (acquiring_) stop_acquisition();
+      start_acquisition();
+      return true;
+    };
+
     if (m_data->run_start && !acquiring_) start_acquisition();
 
     if (m_data->change_config) {

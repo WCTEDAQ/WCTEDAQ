@@ -7,7 +7,14 @@ continuous polling of the cards.
 * `V792::Execute` starts the readout thread.
 * `V792::Finalise` stops the readout thread and closes the connections.
 
-Each setting in the configuration file can be specified either as
+The following settings configure the tool in general:
+
+* `verbose`, integer: log verbosity level. The lower level, the more important
+  the log message is.
+* `standalone`, boolean: when 1, the tool does not require RunControl in the
+  toolchain and can operate independently.
+
+Each QDC setting in the configuration file can be specified either as
 ```
 setting_name value
 ```
