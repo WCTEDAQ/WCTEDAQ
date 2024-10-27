@@ -31,6 +31,7 @@ class V1290: public Digitizer<caen::V1290::Packet, TDCHit> {
     std::mutex          tdc_errors_mutex;
     caen::V1290::Buffer buffer;
     Chops<RawEvent>     chops;
+    void*               on_spill;
 
     bool chop_event(size_t cycle, RawEvent&, bool head);
 

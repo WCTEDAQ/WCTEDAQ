@@ -155,10 +155,20 @@ void V792::init(unsigned& nboards, VMEReadout<QDCHit>*& output) {
   configure();
   nboards = boards.size();
   output  = &m_data->qdc_readout;
+  on_spill = m_data->AlertSubscribe(
+      "SpillCount",
+      [this](const char* alert, const char* payload) {
+        for (auto& board : boards) board.qdc.reset_event_counter();
+      }
+  );
 };
 
 void V792::fini() {
   boards.clear();
+  if (on_spill) {
+    m_data->AlertUnsubscribe("SpillCount", on_spill);
+    on_spill = nullptr;
+  };
 };
 
 void V792::start_acquisition() {

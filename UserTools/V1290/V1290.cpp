@@ -295,10 +295,20 @@ void V1290::init(unsigned& nboards, VMEReadout<TDCHit>*& output) {
   configure();
   nboards = boards.size();
   output  = &m_data->tdc_readout;
+  on_spill = m_data->AlertSubscribe(
+      "SpillCount",
+      [this](const char* alert, const char* payload) {
+        for (auto& board : boards) board.tdc.reset_event();
+      }
+  );
 };
 
 void V1290::fini() {
   boards.clear();
+  if (on_spill) {
+    m_data->AlertUnsubscribe("SpillCount", on_spill);
+    on_spill = nullptr;
+  };
 };
 
 void V1290::start_acquisition() {

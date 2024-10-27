@@ -86,7 +86,10 @@ void V1495::read_counters() {
   store >> json;
   m_data->services->SendMonitoringData(json, "V1495");
 
-  // Reset counters
+  reset_counters();
+};
+
+void V1495::reset_counters() {
   board->write32(0x3002, 1);
 };
 
@@ -105,6 +108,13 @@ bool V1495::Initialise(std::string configfile, DataModel& data) {
           "CounterRead",
           [this](const char*, const char*) { read_counters(); }
       );
+
+    on_spill = m_data->AlertSubscribe(
+        "SpillCount",
+        [this](const char* alert, const char* payload) {
+          reset_counters();
+        }
+    );
 
     ExportConfiguration();
 
@@ -136,6 +146,11 @@ bool V1495::Finalise() {
     if (board) {
       delete board;
       board = nullptr;
+    };
+
+    if (on_spill) {
+      m_data->AlertUnsubscribe("SpillCount", on_spill);
+      on_spill = nullptr;
     };
 
     return true;

@@ -30,6 +30,7 @@ class V792: public Digitizer<caen::V792::Packet, QDCHit> {
     std::vector<Board> boards;
     caen::V792::Buffer buffer;
     Chops<RawEvent>    chops;
+    void*              on_spill;
 
     void chop_event(size_t cycle, RawEvent&, bool head);
 
