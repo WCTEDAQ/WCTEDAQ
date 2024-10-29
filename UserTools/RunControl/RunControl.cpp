@@ -22,8 +22,11 @@ bool RunControl::Initialise(std::string configfile, DataModel &data){
   
   m_run_start=false;
   m_run_stop=false;
+  m_stopping=false;
   m_start_time=&m_data->start_time;
   //printf("d3\n");
+
+  if(m_data->readout_windows==0) m_data->readout_windows= new std::deque<ReadoutWindow*>;
   
   m_util=new Utilities();
   args=new RunControl_args();
@@ -70,9 +73,21 @@ bool RunControl::Execute(){
   }
 
   if(m_data->run_start) m_data->run_start=false;
-  if(m_data->run_stop) m_data->run_stop=false;
+  if(m_data->run_stop){
+    m_data->run_stop=false;
+    m_stopping=true;
+  }
   if(m_data->sub_run) m_data->sub_run=false;
-  
+
+  if(m_stopping){
+
+    m_data->readout_windows_mtx.lock();
+    if(m_data->readout_windows->size()==0){
+      m_data->vars.Set("Status", "Run Stopped");
+      m_stopping=false;
+    }
+    m_data->readout_windows_mtx.unlock();
+  }
   
   if(m_run_start){
     //    printf("in runstart\n");
@@ -190,7 +205,11 @@ void RunControl::Thread(Thread_args* arg){
 }
 
 std::string RunControl::RunStart(const char* key){
-  
+
+  if(m_stopping){
+    m_data->sc_vars["RunStart"]->SetValue("command");
+    return "Error: Previous run still stopping";     
+  }
   if(m_run_start){
     m_data->sc_vars["RunStart"]->SetValue("command");
     return "Error: Already Starting new run";
@@ -263,7 +282,7 @@ std::string RunControl::RunStop(const char* key){
   
   //m_data->services->SendLog("Run "+std::to_string(m_data->run_number)+ " stopped", 0);
   if(*key!='N') Log("Run "+std::to_string(m_data->run_number)+ " stopped", 0);  // don't report for subrun changes
-  return "Run stopped";
+  return "Run stopping";
   
 }
 

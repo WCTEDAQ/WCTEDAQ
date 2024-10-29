@@ -25,9 +25,9 @@ bool Nhits::Execute(){
   
   if(m_data->change_config){
     InitialiseConfiguration(m_configfile);
-    if(LoadVariables()){
+    if(!LoadVariables()){
       m_data->services->SendLog("ERROR: nhits configuration not correctly set" , 0);
-      m_data->services->SendAlarm("ERROR: nhits configuration nto correctly set");
+      m_data->services->SendAlarm("ERROR: nhits configuration not correctly set");
       return false;
     }
     ExportConfiguration();
@@ -45,7 +45,7 @@ bool Nhits::Finalise(){
 bool Nhits::NhitsAlgo(void* data){
 
   Trigger_algo_args* args=reinterpret_cast<Trigger_algo_args*>(data);
-
+  
   unsigned int threshold=0;
   unsigned int jump=0;
   unsigned int window_size=0;
@@ -87,9 +87,9 @@ bool Nhits::NhitsAlgo(void* data){
 bool Nhits::LoadVariables(){
 
   
-  if(!m_variables.Get("threshold", threshold)) return false;
-   if(!m_variables.Get("jump", threshold)) return false;
-   if(!m_variables.Get("window_size", threshold)) return false;
+  if(!m_variables.Get("nhits_threshold", threshold)) threshold=20;//return false;
+  if(!m_variables.Get("nhits_jump", jump)) jump=10;//return false;
+  if(!m_variables.Get("nhits_window_size", window_size)) window_size= 25;//return false;
    
    bool nhits=false;
    m_variables.Get("nhits", nhits);

@@ -62,65 +62,101 @@ void Trigger2::Thread(Thread_args* arg){
 
   Trigger2_args* args=reinterpret_cast<Trigger2_args*>(arg);
 
+  //  printf("d1\n");
+   args->data->sorted_data_mtx.lock();
+   //				    printf("d1.1\n");
   if(!args->data->sorted_data.size()){
-    usleep(100);
-    return;
+    //printf("d1.2\n");
+     args->data->sorted_data_mtx.unlock();
+     //printf("d1.3\n");
+     usleep(100);
+     //printf("d1.4\n");
+     return;
   }
+   //printf("d1.5\n");
+   args->data->sorted_data_mtx.unlock();
+  //printf("d2\n");
   std::map<unsigned int, MPMTData*> sorted_data;
   args->data->sorted_data_mtx.lock();
   std::swap(sorted_data , args->data->sorted_data);
   args->data->sorted_data_mtx.unlock();
-   
-  for(std::map<unsigned int, MPMTData*>::iterator it= sorted_data.begin(); it!= sorted_data.end(); it++){
-    
-    Job* tmp_job = new Job("triggering");
-    Trigger2_args*  tmp_args= new Trigger2_args;
-    tmp_args->data = args->data;
-    tmp_args->bin = it->first;
-    tmp_args->sorted_data = it->second;
-    
-    for(int j=0; j<args->triggers.size(); j++){
-      tmp_args->trigger_functions.push_back(args->data->trigger_functions[args->triggers.at(j)]);
-      Trigger_algo_args* tmp_algo_args = new Trigger_algo_args;
-      tmp_algo_args->m_data = args->data;
-      tmp_algo_args->sorted_data = it->second;
-      tmp_algo_args->trigger_vars = args->data->trigger_vars[args->triggers.at(j)];
-      args->trigger_algo_args.push_back(tmp_algo_args);
-    }
-    
-    tmp_job->func=TriggerJob;
-    args->data->job_queue.AddJob(tmp_job);
+   //printf("d3\n");
 
-  }
-  
+   if(args->triggers.size()==0){
+       ////////////////////
+
+     args->triggers.push_back("nhits");
+     args->triggers.push_back("main");
+     args->triggers.push_back("led");
+       //////////
+   }
+
+   
+   if(args->triggers.size()>0){
+     
+     for(std::map<unsigned int, MPMTData*>::iterator it= sorted_data.begin(); it!= sorted_data.end(); it++){
+       //printf("d4\n");
+       Job* tmp_job = new Job("triggering");
+       Trigger2_args*  tmp_args= new Trigger2_args;
+       tmp_args->data = args->data;
+       tmp_args->bin = it->first;
+       tmp_args->sorted_data = it->second;
+       //printf("d5 size=%d\n",args->triggers.size());
+
+	for(int j=0; j<args->triggers.size(); j++){
+	  //printf("d5.1 trigger=%s\n",args->triggers.at(j).c_str());
+	  //printf("d5.2 count=%d\n",args->data->trigger_functions.count(args->triggers.at(j).c_str()));
+	  if(args->data->trigger_functions.count(args->triggers.at(j).c_str())>0){
+	    tmp_args->trigger_functions.push_back(args->data->trigger_functions[args->triggers.at(j)]);
+	    Trigger_algo_args* tmp_algo_args = new Trigger_algo_args;
+	    tmp_algo_args->m_data = args->data;
+	    tmp_algo_args->sorted_data = it->second;
+	    tmp_algo_args->trigger_vars = args->data->trigger_vars[args->triggers.at(j)];
+	    tmp_args->trigger_algo_args.push_back(tmp_algo_args);
+	  }
+       }
+       //printf("d6\n");
+       tmp_job->func=TriggerJob;
+       tmp_job->data=tmp_args;
+       //printf("d6.2 pointerin=%p\n", tmp_args);
+       args->data->job_queue.AddJob(tmp_job);
+     }
+     
+   }
+   
+   //printf("d7\n");
 }
 
 bool Trigger2::TriggerJob(void* data){
-
-Trigger2_args* args=reinterpret_cast<Trigger2_args*>(args);
-
- for(int i=0; i<args->trigger_functions.size(); i++){
-
-   args->trigger_functions.at(i)(args->trigger_algo_args.at(i));
-
- }
-
- args->data->triggered_data_mtx.lock();
- args->data->triggered_data[args->bin] = args->sorted_data;
- args->data->triggered_data_mtx.unlock();
-
- 
- return true;
-
+  //printf("r1 pointer =%p\n",data);
+  Trigger2_args* args=reinterpret_cast<Trigger2_args*>(data);
+  //printf("r2\n");
+  //printf("r2.1 size=%d\n",args->trigger_functions.size());
+  for(int i=0; i<args->trigger_functions.size(); i++){
+    //printf("r3\n");
+    args->trigger_functions.at(i)(args->trigger_algo_args.at(i));
+    //printf("r4\n");
+  }
+  //printf("r5\n");
+  args->data->triggered_data_mtx.lock();
+  //printf("r6\n");
+  args->data->triggered_data[args->bin] = args->sorted_data;
+  //printf("r7\n");
+  args->data->triggered_data_mtx.unlock();
+  //printf("r8\n");
+  
+  return true;
+  
 }
 
 bool Trigger2::MainTrigger(void* data){
-
+//printf("m1\n");
 Trigger_algo_args* args=reinterpret_cast<Trigger_algo_args*>(data);
- 
+ //printf("m2\n");
  for(unsigned int i=0; i<args->sorted_data->mpmt_triggers.size(); i++){
+//printf("m3\n");
    TriggerInfo tmp_trigger;
-
+//printf("m4\n");
    switch(args->sorted_data->mpmt_triggers.at(i).GetChannel()){
 
    case 0U: //main trigger
@@ -158,14 +194,14 @@ Trigger_algo_args* args=reinterpret_cast<Trigger_algo_args*>(data);
      args->sorted_data->unmerged_triggers.push_back(tmp_trigger);    
      break;
      
-   case 6U: //hardware trigger
+   case 7U: //hardware trigger
      tmp_trigger.type = TriggerType::HARD6;
      tmp_trigger.time = ((unsigned long) args->sorted_data->coarse_counter << 16) |  ((unsigned long) args->sorted_data->mpmt_triggers.at(i).GetCoarseCounter());
      args->sorted_data->unmerged_triggers.push_back(tmp_trigger); 
      break;
 
    }  
-   
+   //printf("m1\n");
    
  }
  return true;
@@ -214,8 +250,8 @@ void Trigger2::LoadConfig(){
   //bool Beam=false;
   
   if(main){
-    m_data->trigger_functions["beam"]=MainTrigger;
-    m_data->trigger_vars["beam"]=&main_vars;
+    m_data->trigger_functions["main"]=MainTrigger;
+    m_data->trigger_vars["main"]=&main_vars;
   }
   if(led){
     m_data->trigger_functions["led"]=LedTrigger;

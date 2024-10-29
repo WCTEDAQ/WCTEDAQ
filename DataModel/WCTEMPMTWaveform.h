@@ -97,21 +97,21 @@ public:
   
   WCTEMPMTWaveform(){samples.clear();}
   WCTEMPMTWaveform(unsigned short& in_card_id, unsigned char* in_data){
-    printf("n1\n");
+    //printf("n1\n");
     samples.clear();
-    printf("n2\n");
+    //printf("n2\n");
     header.SetCardID(in_card_id);
-    printf("n3\n");
+    //printf("n3\n");
     memcpy(header.GetData(), &in_data[0], header.GetSize());
-    printf("n4\n");
+    //printf("n4\n");
     if(header.GetLength()!=0){
       samples.resize(header.GetLength());
-      printf("n5%u\n",sizeof(samples.data()));
-      printf("n5b %u\n",header.GetNumSamples());
-      printf("n5c %u\n",header.GetLength());
-      header.Print();
+      //printf("n5%u\n",sizeof(samples.data()));
+      //printf("n5b %u\n",header.GetNumSamples());
+      //printf("n5c %u\n",header.GetLength());
+      //header.Print();
       memcpy(samples.data(), &in_data[10], sizeof(samples.data())); 
-      printf("n6\n");
+      //printf("n6\n");
     }
   }
     

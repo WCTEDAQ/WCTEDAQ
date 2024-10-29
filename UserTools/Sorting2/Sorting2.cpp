@@ -38,10 +38,10 @@ bool Sorting2::Execute(){
     ExportConfiguration();
     
   }
-  
+  m_data->monitoring_store_mtx.lock();
   m_data->monitoring_store.Set("unsorted_data_size",m_data->unsorted_data.size());
   m_data->monitoring_store.Set("sorted_data_size",m_data->sorted_data.size());
-  
+  m_data->monitoring_store_mtx.unlock();
   
   return true;
 }
@@ -100,92 +100,132 @@ void Sorting2::Thread(Thread_args* arg){
      tmp_args->data=args->data;
      tmp_args->unsorted_data=data_to_sort.at(i);
      tmp_job->func=SortData;
+     tmp_job->data=tmp_args;
+     //printf("sending job\n");
      args->data->job_queue.AddJob(tmp_job);
+     //printf("added to queue\n");
    }
    
 }
 
 bool Sorting2::SortData(void* data){
-  
+  //printf("in sortdata\n");
   Sorting2_args* args=reinterpret_cast<Sorting2_args*>(data);
-  
+  //printf("h1\n");
   MPMTData* tmp= new MPMTData;
+  //printf("h2\n");
   tmp->coarse_counter=args->unsorted_data->coarse_counter;
-  
-  unsigned int arr[4194303U] = { 0 };
-  
+  //printf("h3\n");
+  //  args->unsorted_data->Print();
+  unsigned int* arr =new unsigned int[8388607U];
+   memset(&arr[0], 0, sizeof(*arr)*8388607);
+   //printf("h4\n");
   //////////sort mpmt hits ///////////////
+  unsigned int bin=0;
 
   
-  for(std::vector<WCTEMPMTHit>::iterator it=args->unsorted_data->mpmt_hits.begin(); it!= args->unsorted_data->mpmt_hits.end(); it++){
-    arr[(it->GetCoarseCounter() & 4194303U)]++;
-  }
-  for( unsigned int i=1; i<4194303U; i++){
-    arr[i]+=arr[i-1];
-    //    tmp->cumulative_sum[i]=arr[i];
-  }
-
-  std::copy(std::begin(arr), std::end(arr), std::begin(tmp->cumulative_sum));
-
-  tmp->mpmt_hits.resize(args->unsorted_data->mpmt_hits.size());
-
-  unsigned int bin=0;
-  for(unsigned int i=0; i< args->unsorted_data->mpmt_hits.size(); i++){
-    bin=(args->unsorted_data->mpmt_hits.at(i).GetCoarseCounter() & 4194303U);
-    tmp->mpmt_hits.at(arr[bin]-1)=args->unsorted_data->mpmt_hits.at(i);
-    arr[bin]--;
+  //printf("d5 hits size=%d\n", args->unsorted_data->mpmt_hits.size());
+  if(args->unsorted_data->mpmt_hits.size() > 0){
+    for(std::vector<WCTEMPMTHit>::iterator it=args->unsorted_data->mpmt_hits.begin(); it!= args->unsorted_data->mpmt_hits.end(); it++){
+      arr[(it->GetCoarseCounter() & 8388607U)]++;
+    }
+    //printf("d5.5\n");
     
+    for( unsigned int i=1; i<8388607U; i++){
+      arr[i]+=arr[i-1];
+      //    tmp->cumulative_sum[i]=arr[i];
+    }
+    //printf("d6\n");
+    
+    //  std::copy(std::begin(arr), std::end(arr), std::begin(tmp->cumulative_sum));
+    memcpy(&tmp->cumulative_sum[0], &arr[0], sizeof(*arr)*8388607);
+    //std::copy(&arr[0], &arr[194302]), std::begin(tmp->cumulative_sum));
+    //printf("d7\n");
+    //printf("d7.1 size=%d\n",args->unsorted_data->mpmt_hits.size());
+    //printf("d7.2 size=%d\n",tmp->mpmt_hits.size());
+    tmp->mpmt_hits.resize(args->unsorted_data->mpmt_hits.size());
+    //printf("d8\n");
+    
+    //printf("d8.1\n");
+    for(unsigned int i=0; i< args->unsorted_data->mpmt_hits.size(); i++){
+      bin=(args->unsorted_data->mpmt_hits.at(i).GetCoarseCounter() & 8388607U);
+      tmp->mpmt_hits.at(arr[bin]-1)=args->unsorted_data->mpmt_hits.at(i);
+      arr[bin]--;
+      
+    }
+    //printf("d9\n");
+    memset(&arr[0], 0, sizeof(*arr)*8388607);
+    //printf("d10\n");
   }
-
-  memset(arr, 0, sizeof(arr));
-
   /////////////////////////////
-
+  /* bool proof=false;
+  for(unsigned int i=1; i <tmp->mpmt_hits.size(); i++){
+    //   printf(" %u:%u\n",i,tmp->mpmt_hits.at(i).GetCoarseCounter());
+    if(tmp->mpmt_hits.at(i).GetCoarseCounter() <tmp->mpmt_hits.at(i-1).GetCoarseCounter()){
+      //printf(" badsort %u,%u\n",i, tmp->mpmt_hits.size());
+      //printf(" %u:%u\n",tmp->mpmt_hits.at(i-1).GetCoarseCounter(), tmp->mpmt_hits.at(i).GetCoarseCounter());
+      //printf(" lower bits %u:%u\n",(tmp->mpmt_hits.at(i-1).GetCoarseCounter() & 8388607U), (tmp->mpmt_hits.at(i).GetCoarseCounter()& 8388607U));
+      proof=true;
+    }
+  }
+  if(proof){
+ for(unsigned int i=1; i <tmp->mpmt_hits.size(); i++){
+   //printf(" proof %u, %u, %u: %u, %u\n",i, tmp->mpmt_hits.at(i).GetCoarseCounter(), (tmp->mpmt_hits.at(i).GetCoarseCounter() & 8388607U),(tmp->coarse_counter & 65535U), (tmp->mpmt_hits.at(i).GetCoarseCounter() >> 16));
+ }
+  
+}
+*/
+  //printf("end\n\n");
   ///////// sorting LEDS ////////
   
-  
-  for(std::vector<WCTEMPMTLED>::iterator it=args->unsorted_data->mpmt_leds.begin(); it!= args->unsorted_data->mpmt_leds.end(); it++){
-    arr[(it->GetCoarseCounter() & 4194303U)]++;
+  //printf("d11 leds-%d\n",args->unsorted_data->mpmt_leds.size());
+  if(args->unsorted_data->mpmt_leds.size() > 0){
+    for(std::vector<WCTEMPMTLED>::iterator it=args->unsorted_data->mpmt_leds.begin(); it!= args->unsorted_data->mpmt_leds.end(); it++){
+      arr[(it->GetCoarseCounter() & 8388607U)]++;
+    }
+    for( unsigned int i=1; i<8388607U; i++){
+      arr[i]+=arr[i-1];
+    }
+    
+    tmp->mpmt_leds.resize(args->unsorted_data->mpmt_leds.size());
+    
+    bin=0;
+    for(unsigned int i=0; i< args->unsorted_data->mpmt_leds.size(); i++){
+      bin=(args->unsorted_data->mpmt_leds.at(i).GetCoarseCounter() & 8388607U);
+      tmp->mpmt_leds.at(arr[bin]-1)=args->unsorted_data->mpmt_leds.at(i);
+      arr[bin]--;
+    }
+    
+    memset(&arr[0], 0, sizeof(*arr)*8388607);
+ 
+    //printf("d12\n");
   }
-  for( unsigned int i=1; i<4194303U; i++){
-    arr[i]+=arr[i-1];
-  }
-
-  tmp->mpmt_leds.resize(args->unsorted_data->mpmt_leds.size());
-
-  bin=0;
-  for(unsigned int i=0; i< args->unsorted_data->mpmt_leds.size(); i++){
-    bin=(args->unsorted_data->mpmt_leds.at(i).GetCoarseCounter() & 4194303U);
-    tmp->mpmt_leds.at(arr[bin]-1)=args->unsorted_data->mpmt_leds.at(i);
-    arr[bin]--;
-  }
-
-  memset(arr, 0, sizeof(arr));
-
   ///////////////////////////////////////////
 
 
   ///////// sorting Waveforms ////////
   
-  
-  for(std::vector<WCTEMPMTWaveform>::iterator it=args->unsorted_data->mpmt_waveforms.begin(); it!= args->unsorted_data->mpmt_waveforms.end(); it++){
-    arr[(it->header.GetCoarseCounter() & 4194303U)]++;
+  //printf("d13 waveforms=%d\n",args->unsorted_data->mpmt_waveforms.size());
+  if(args->unsorted_data->mpmt_waveforms.size() > 0){
+    for(std::vector<WCTEMPMTWaveform>::iterator it=args->unsorted_data->mpmt_waveforms.begin(); it!= args->unsorted_data->mpmt_waveforms.end(); it++){
+      arr[(it->header.GetCoarseCounter() & 8388607U)]++;
+    }
+    for( unsigned int i=1; i<8388607U; i++){
+      arr[i]+=arr[i-1];
+    }
+    
+    tmp->mpmt_waveforms.resize(args->unsorted_data->mpmt_waveforms.size());
+    
+    bin=0;
+    for(unsigned int i=0; i< args->unsorted_data->mpmt_waveforms.size(); i++){
+      bin=(args->unsorted_data->mpmt_waveforms.at(i).header.GetCoarseCounter() & 8388607U);
+      tmp->mpmt_waveforms.at(arr[bin]-1)=args->unsorted_data->mpmt_waveforms.at(i);
+      arr[bin]--;
+    }
+
+     memset(&arr[0], 0, sizeof(*arr)*8388607);
+    //printf("d14\n");
   }
-  for( unsigned int i=1; i<4194303U; i++){
-    arr[i]+=arr[i-1];
-  }
-
-  tmp->mpmt_waveforms.resize(args->unsorted_data->mpmt_waveforms.size());
-
-  bin=0;
-  for(unsigned int i=0; i< args->unsorted_data->mpmt_waveforms.size(); i++){
-    bin=(args->unsorted_data->mpmt_waveforms.at(i).header.GetCoarseCounter() & 4194303U);
-    tmp->mpmt_waveforms.at(arr[bin]-1)=args->unsorted_data->mpmt_waveforms.at(i);
-    arr[bin]--;
-  }
-
-  memset(arr, 0, sizeof(arr));
-
   ///////////////////////////////////////////
 
 
@@ -211,93 +251,103 @@ bool Sorting2::SortData(void* data){
   memset(arr, 0, sizeof(arr));
   */
   ///////////////////////////////////////////
-
+  
   ///////// sorting Triggers ////////
-  
-  
-  for(std::vector<WCTEMPMTHit>::iterator it=args->unsorted_data->mpmt_triggers.begin(); it!= args->unsorted_data->mpmt_triggers.end(); it++){
-    arr[(it->GetCoarseCounter() & 4194303U)]++;
-  }
-  for( unsigned int i=1; i<4194303U; i++){
-    arr[i]+=arr[i-1];
-  }
-
-  tmp->mpmt_triggers.resize(args->unsorted_data->mpmt_triggers.size());
-
-  bin=0;
-  for(unsigned int i=0; i< args->unsorted_data->mpmt_triggers.size(); i++){
-    bin=(args->unsorted_data->mpmt_triggers.at(i).GetCoarseCounter() & 4194303U);
-    tmp->mpmt_triggers.at(arr[bin]-1)=args->unsorted_data->mpmt_triggers.at(i);
-    arr[bin]--; 
-  }
-
-
-  ///////////////////////////////////////////
-    //////////sort extra hits ///////////////
-
-  //  ((coarsecounter & 4194303U)<<3) | (fine >> 13)
-  
-  for(std::vector<WCTEMPMTHit>::iterator it=args->unsorted_data->extra_hits.begin(); it!= args->unsorted_data->extra_hits.end(); it++){
-    arr[(it->GetCoarseCounter() & 4194303U)]++;
-  }
-  for( unsigned int i=1; i<4194303U; i++){
-    arr[i]+=arr[i-1];
-  }
-
-  tmp->extra_hits.resize(args->unsorted_data->extra_hits.size());
-
-  bin=0;
-  for(unsigned int i=0; i< args->unsorted_data->extra_hits.size(); i++){
-    bin=(args->unsorted_data->extra_hits.at(i).GetCoarseCounter() & 4194303U);
-    tmp->extra_hits.at(arr[bin]-1)=args->unsorted_data->extra_hits.at(i);
-    arr[bin]--;
+  //printf("d15 triggers=%d\n",args->unsorted_data->mpmt_triggers.size());
+  if(args->unsorted_data->mpmt_triggers.size() > 0){
+    for(std::vector<WCTEMPMTHit>::iterator it=args->unsorted_data->mpmt_triggers.begin(); it!= args->unsorted_data->mpmt_triggers.end(); it++){
+      arr[(it->GetCoarseCounter() & 8388607U)]++;
+    }
+    for( unsigned int i=1; i<8388607U; i++){
+      arr[i]+=arr[i-1];
+    }
     
-  }
-  
-  memset(arr, 0, sizeof(arr));
+    tmp->mpmt_triggers.resize(args->unsorted_data->mpmt_triggers.size());
+    
+    bin=0;
+    for(unsigned int i=0; i< args->unsorted_data->mpmt_triggers.size(); i++){
+      bin=(args->unsorted_data->mpmt_triggers.at(i).GetCoarseCounter() & 8388607U);
+      tmp->mpmt_triggers.at(arr[bin]-1)=args->unsorted_data->mpmt_triggers.at(i);
+      arr[bin]--; 
+    }
 
+     memset(&arr[0], 0, sizeof(*arr)*8388607);
+    //printf("d16\n");
+  }
+    ///////////////////////////////////////////
+    //////////sort extra hits ///////////////
+    
+  //  ((coarsecounter & 4194303U)<<3) | (fine >> 13)
+  //printf("d17 extrahits=%d\n",args->unsorted_data->extra_hits.size());
+  if(args->unsorted_data->extra_hits.size() > 0){
+    for(std::vector<WCTEMPMTHit>::iterator it=args->unsorted_data->extra_hits.begin(); it!= args->unsorted_data->extra_hits.end(); it++){
+      arr[(it->GetCoarseCounter() & 8388607U)]++;
+    }
+    for( unsigned int i=1; i<8388607U; i++){
+      arr[i]+=arr[i-1];
+    }
+    
+    tmp->extra_hits.resize(args->unsorted_data->extra_hits.size());
+    
+    bin=0;
+    for(unsigned int i=0; i< args->unsorted_data->extra_hits.size(); i++){
+      bin=(args->unsorted_data->extra_hits.at(i).GetCoarseCounter() & 8388607U);
+      tmp->extra_hits.at(arr[bin]-1)=args->unsorted_data->extra_hits.at(i);
+      arr[bin]--;
+      
+    }
+
+     memset(&arr[0], 0, sizeof(*arr)*8388607);
+    //printf("d18\n");
+  }
   /////////////////////////////
 
   ///////// sorting extra Waveforms ////////
-  
-  
-  for(std::vector<WCTEMPMTWaveform>::iterator it=args->unsorted_data->extra_waveforms.begin(); it!= args->unsorted_data->extra_waveforms.end(); it++){
-    arr[(it->header.GetCoarseCounter() & 4194303U)]++;
+  //printf("d19 extra waveforms=%d\n",args->unsorted_data->extra_waveforms.size());
+  if(args->unsorted_data->extra_waveforms.size() > 0){
+    for(std::vector<WCTEMPMTWaveform>::iterator it=args->unsorted_data->extra_waveforms.begin(); it!= args->unsorted_data->extra_waveforms.end(); it++){
+      arr[(it->header.GetCoarseCounter() & 8388607U)]++;
+    }
+    for( unsigned int i=1; i<8388607U; i++){
+      arr[i]+=arr[i-1];
+    }
+    
+    tmp->extra_waveforms.resize(args->unsorted_data->extra_waveforms.size());
+    
+    bin=0;
+    for(unsigned int i=0; i< args->unsorted_data->extra_waveforms.size(); i++){
+      bin=(args->unsorted_data->extra_waveforms.at(i).header.GetCoarseCounter() & 8388607U);
+      tmp->extra_waveforms.at(arr[bin]-1)=args->unsorted_data->extra_waveforms.at(i);
+      arr[bin]--;
+    }
+    
+ memset(&arr[0], 0, sizeof(*arr)*8388607);
   }
-  for( unsigned int i=1; i<4194303U; i++){
-    arr[i]+=arr[i-1];
-  }
-
-  tmp->extra_waveforms.resize(args->unsorted_data->extra_waveforms.size());
-
-  bin=0;
-  for(unsigned int i=0; i< args->unsorted_data->extra_waveforms.size(); i++){
-    bin=(args->unsorted_data->extra_waveforms.at(i).header.GetCoarseCounter() & 4194303U);
-    tmp->extra_waveforms.at(arr[bin]-1)=args->unsorted_data->extra_waveforms.at(i);
-    arr[bin]--;
-  }
-
-  memset(arr, 0, sizeof(arr));
-
   ///////////////////////////////////////////
 
-    
-  
+    //printf("d20\n");
+  //printf("before after sort\n");
+  //args->unsorted_data->Print();
+  //tmp->Print();
   delete args->unsorted_data;
   args->unsorted_data=0;
   args->data->sorted_data_mtx.lock();
   args->data->sorted_data[tmp->coarse_counter >> 6]=tmp;
   args->data->sorted_data_mtx.unlock();
-  
+  //printf("d21\n");
   args->data=0;
   delete args;
   args=0;
+  delete[] arr;
+  arr=0;
+  //printf("d22\n");
   
-  return true;
+ return true;
+ 
 }
 
 void Sorting2::LoadConfig(){
-  unsigned int pre_sort_wait;
+  unsigned int pre_sort_wait=0;
   if(!m_variables.Get("verbose",m_verbose)) m_verbose=1;
   if(!m_variables.Get("pre_sort_wait_sec",pre_sort_wait)) pre_sort_wait=2; 
   args->period=boost::posix_time::seconds(pre_sort_wait);

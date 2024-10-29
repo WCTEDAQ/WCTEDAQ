@@ -40,9 +40,15 @@ template <typename Hit>
 std::vector<Hit> VMEReadout<Hit>::getEvent() {
   std::lock_guard<std::mutex> lock(mutex);
   ///// this is inefficent ben multiple copies
-  std::vector<Hit> ret= readout.at(0);
-  readout.pop_front();
-  return ret;
+  if(readout.size()>0){
+    std::vector<Hit> ret= readout.at(0);
+    readout.pop_front();
+    return ret;
+  }
+  else {
+    std::vector<Hit> tmp;
+    return tmp;
+  }
 };
 
 namespace VMEReadout_ {

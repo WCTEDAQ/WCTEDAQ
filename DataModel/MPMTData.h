@@ -18,12 +18,20 @@ struct MPMTData{
   std::vector<WCTEMPMTHit> mpmt_triggers;
   std::vector<WCTEMPMTHit> extra_hits;
   std::vector<WCTEMPMTWaveform> extra_waveforms;
-  unsigned int cumulative_sum[4194303U];
+  unsigned int cumulative_sum[8388607U];
   std::mutex unmerged_triggers_mtx;
   std::vector<TriggerInfo> unmerged_triggers;
-  
-
+  void Print(){
+    printf("coarse_counter=%u\n", coarse_counter);
+    printf("mpmt_hits.size()=%d\n", mpmt_hits.size());
+    printf("mpmt_waveforms.size()=%d\n", mpmt_waveforms.size());
+    printf("mpm_leds.size()=%d\n", mpmt_leds.size());
+    printf("mpm_pps.size()=%d\n", mpmt_pps.size());
+    printf("mpm_triggers.size()=%d\n", mpmt_triggers.size());
+    printf("extra_hits.size()=%d\n", extra_hits.size());
+    printf("extra_waveforms.size()=%d\n", extra_waveforms.size());
+    printf("unmerged_triggers.size()=%d\n\n", unmerged_triggers.size()); 
+  }
 };
-
 
 #endif

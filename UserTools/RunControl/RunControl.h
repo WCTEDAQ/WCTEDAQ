@@ -65,6 +65,7 @@ class RunControl: public Tool {
   bool m_run_start;
   bool m_run_stop;
   bool m_new_sub_run;
+  bool m_stopping;
   std::string m_run_description;
   
 

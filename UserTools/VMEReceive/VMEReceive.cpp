@@ -28,6 +28,9 @@ bool VMEReceive::Initialise(std::string configfile, DataModel &data){
   if(!m_variables.Get("ip",ip)) ip="192.168.10.18";
   std::stringstream connection;
   connection<<"tcp://"<<ip<<":"<<port;
+
+  qdc_count=0;
+  tdc_count=0;
   
   m_util=new Utilities();
   args=new VMEReceive_args();
@@ -55,8 +58,12 @@ bool VMEReceive::Initialise(std::string configfile, DataModel &data){
 
 bool VMEReceive::Execute(){
 
+  //need to add a load config that resets counts
+  
+  m_data->monitoring_store_mtx.lock();
   m_data->monitoring_store.Set("qdc_count", qdc_count);
   m_data->monitoring_store.Set("tdc_count", tdc_count);
+   m_data->monitoring_store_mtx.unlock();
   return true;
 }
 
