@@ -38,10 +38,13 @@ bool Sorting2::Execute(){
     ExportConfiguration();
     
   }
+  /*
+  usleep(1000);
   m_data->monitoring_store_mtx.lock();
   m_data->monitoring_store.Set("unsorted_data_size",m_data->unsorted_data.size());
   m_data->monitoring_store.Set("sorted_data_size",m_data->sorted_data.size());
   m_data->monitoring_store_mtx.unlock();
+  */
   
   return true;
 }
@@ -80,7 +83,7 @@ void Sorting2::Thread(Thread_args* arg){
    args->data->unsorted_data_mtx.lock();
   
    //////////// map key is in 33,553,920 ns ~ 33.5ms ////////////////
-   for(std::map<unsigned int, MPMTData*>::iterator it= args->data->unsorted_data.begin(); it!= args->data->unsorted_data.end(); it++){
+   for(std::unordered_map<unsigned int, MPMTData*>::iterator it= args->data->unsorted_data.begin(); it!= args->data->unsorted_data.end(); it++){
      if(it->first< ((args->data->current_coarse_counter >>22) - 60)){ //~2 seconds seconds away from current time (60 x ~33.5ms)    
        items_to_remove.push_back(it->first);
        data_to_sort.push_back(it->second);
@@ -102,7 +105,7 @@ void Sorting2::Thread(Thread_args* arg){
      tmp_job->func=SortData;
      tmp_job->data=tmp_args;
      //printf("sending job\n");
-     args->data->job_queue.AddJob(tmp_job);
+        args->data->job_queue.AddJob(tmp_job);
      //printf("added to queue\n");
    }
    
@@ -117,12 +120,13 @@ bool Sorting2::SortData(void* data){
   tmp->coarse_counter=args->unsorted_data->coarse_counter;
   //printf("h3\n");
   //  args->unsorted_data->Print();
-  unsigned int* arr =new unsigned int[8388607U];
-   memset(&arr[0], 0, sizeof(*arr)*8388607);
+  
+  //  unsigned int* arr =new unsigned int[8388607U];
+  //  memset(&arr[0], 0, sizeof(*arr)*8388607);
    //printf("h4\n");
   //////////sort mpmt hits ///////////////
   unsigned int bin=0;
-
+  /*
   
   //printf("d5 hits size=%d\n", args->unsorted_data->mpmt_hits.size());
   if(args->unsorted_data->mpmt_hits.size() > 0){
@@ -177,7 +181,7 @@ bool Sorting2::SortData(void* data){
 */
   //printf("end\n\n");
   ///////// sorting LEDS ////////
-  
+  /*
   //printf("d11 leds-%d\n",args->unsorted_data->mpmt_leds.size());
   if(args->unsorted_data->mpmt_leds.size() > 0){
     for(std::vector<WCTEMPMTLED>::iterator it=args->unsorted_data->mpmt_leds.begin(); it!= args->unsorted_data->mpmt_leds.end(); it++){
@@ -251,7 +255,7 @@ bool Sorting2::SortData(void* data){
   memset(arr, 0, sizeof(arr));
   */
   ///////////////////////////////////////////
-  
+  /*
   ///////// sorting Triggers ////////
   //printf("d15 triggers=%d\n",args->unsorted_data->mpmt_triggers.size());
   if(args->unsorted_data->mpmt_triggers.size() > 0){
@@ -324,22 +328,24 @@ bool Sorting2::SortData(void* data){
  memset(&arr[0], 0, sizeof(*arr)*8388607);
   }
   ///////////////////////////////////////////
-
+  */
     //printf("d20\n");
   //printf("before after sort\n");
   //args->unsorted_data->Print();
   //tmp->Print();
   delete args->unsorted_data;
   args->unsorted_data=0;
+  /*
   args->data->sorted_data_mtx.lock();
   args->data->sorted_data[tmp->coarse_counter >> 6]=tmp;
   args->data->sorted_data_mtx.unlock();
+  */
   //printf("d21\n");
   args->data=0;
   delete args;
   args=0;
-  delete[] arr;
-  arr=0;
+  //  delete[] arr;
+  //arr=0;
   //printf("d22\n");
   
  return true;

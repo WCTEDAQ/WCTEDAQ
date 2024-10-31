@@ -24,6 +24,7 @@
 #include "WCTEMPMTPPS.h"
 #include "MPMTData.h"
 #include "VMEReadout.h"
+#include <unordered_map>
 
 #include "TDCHit.h"
 #include "QDCHit.h"
@@ -79,7 +80,7 @@ public:
   unsigned int thread_num;
 
   std::mutex unsorted_data_mtx;
-  std::map<unsigned int, MPMTData*> unsorted_data;
+  std::unordered_map<unsigned int, MPMTData*> unsorted_data;
   
   std::mutex sorted_data_mtx;
   std::map<unsigned int, MPMTData*> sorted_data;

@@ -173,8 +173,11 @@ void WindowBuilder2::Thread(Thread_args* arg){
       
       //////////////////////////// collecting data////////////////////////
        //printf("d11\n");
+      //printf("triggers size=%u\n", merged_triggers.size());      
       for(unsigned int i=0; i<merged_triggers.size(); i++){
 	 //printf("d12\n");
+
+	
 	unsigned long max_time = merged_triggers.at(i).at(0)->time + args->offset_trigger[merged_triggers.at(i).at(0)->type] + args->post_trigger[merged_triggers.at(i).at(0)->type];
 	unsigned long min_time = merged_triggers.at(i).at(0)->time + args->offset_trigger[merged_triggers.at(i).at(0)->type] - args->pre_trigger[merged_triggers.at(i).at(0)->type];;
 	
@@ -186,9 +189,12 @@ void WindowBuilder2::Thread(Thread_args* arg){
 	//printf("max_time=%u\n",max_time);
 	//printf("min_time=%u\n",min_time);
 
+	//	printf("sub triggers size\n%u/\n", merged_triggers.at(i).size());
 	for( unsigned int j=0; j<merged_triggers.at(i).size(); j++){
-	  tmp_readout->triggers_info.push_back(*merged_triggers.at(i).at(j));
+	  tmp_readout->triggers_info.push_back(*(merged_triggers.at(i).at(j)));
 	}
+
+	if(tmp_readout->triggers_info.size()==0) printf("Error!!!\n");
 	
 	for(unsigned int bin_count=0; bin_count<3 ; bin_count++){
 	  if(it->first==0 && bin_count==0) bin_count = 1;

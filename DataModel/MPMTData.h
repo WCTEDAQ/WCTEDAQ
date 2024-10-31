@@ -11,6 +11,14 @@ class TriggerInfo;
 struct MPMTData{
 
   unsigned int coarse_counter; //last 6 bits are zero
+  std::mutex mpmt_hits_mtx;
+  std::mutex mpmt_leds_mtx;
+  std::mutex mpmt_waveforms_mtx;
+  std::mutex mpmt_pps_mtx;
+  std::mutex mpmt_triggers_mtx;
+  std::mutex extra_hits_mtx;
+  std::mutex extra_waveforms_mtx;
+  
   std::vector<WCTEMPMTHit> mpmt_hits;
   std::vector<WCTEMPMTLED> mpmt_leds;
   std::vector<WCTEMPMTWaveform> mpmt_waveforms;

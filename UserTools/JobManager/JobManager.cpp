@@ -37,8 +37,8 @@ bool JobManager::Execute(){
   m_data->monitoring_store.Set("pool_threads",worker_pool_manager->NumThreads());
   m_data->monitoring_store.Set("queued_jobs",m_data->job_queue.size());
    m_data->monitoring_store_mtx.unlock();
-  //printf("jobmanager q:t = %d:%d\n", m_data->job_queue.size(), worker_pool_manager->NumThreads());
-  //usleep(1000);
+  printf("jobmanager q:t = %d:%d\n", m_data->job_queue.size(), worker_pool_manager->NumThreads());
+  usleep(1000);
   if(worker_pool_manager->NumThreads()==m_thread_cap)  m_data->services->SendLog("Warning: Worker Pool Threads Maxed" , 0); //make this a warning
   // std::cout<<"NumThreads="<<worker_pool_manager->NumThreads()<<std::endl;
   //sleep(1);
