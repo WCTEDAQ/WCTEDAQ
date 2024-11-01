@@ -388,6 +388,7 @@ void V1290::process(
     RawEvent& raw_event
 ) {
   Event& event = get_event(raw_event.header.event());
+  event.reserve(event.size() + raw_event.hits.size());
   for (auto& hit : raw_event.hits)
     event.push_back(
         TDCHit(raw_event.header, hit, raw_event.ettt, raw_event.trailer)
