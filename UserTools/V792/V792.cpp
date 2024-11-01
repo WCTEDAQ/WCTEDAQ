@@ -304,8 +304,8 @@ void V792::process(
       throw std::runtime_error(ss.str());
     };
 
-    auto header   = packet->as<caen::V792::Header>();
-    auto ptrailer = packet + header.count() + 1;
+    auto header   = packet++->as<caen::V792::Header>();
+    auto ptrailer = packet + header.count();
     if (ptrailer < qdc_data.end()) {
       auto trailer = ptrailer->as<caen::V792::EndOfBlock>();
       process(
