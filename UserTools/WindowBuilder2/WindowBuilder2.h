@@ -24,7 +24,7 @@ struct WindowBuilder2_args:Thread_args{
   std::map<TriggerType, unsigned long> pre_trigger;
   std::map<TriggerType, unsigned long> post_trigger;
   std::map<TriggerType, long> offset_trigger;
-
+  std::map<unsigned int, MPMTData*> triggered_data;
 };
 
 /**

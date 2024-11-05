@@ -1,14 +1,17 @@
-#include "WindowBuilder2.h"
+#include "WindowBuilder3.h"
 
-WindowBuilder2_args::WindowBuilder2_args():Thread_args(){}
+WindowBuilder3_args::WindowBuilder3_args():Thread_args(){}
 
-WindowBuilder2_args::~WindowBuilder2_args(){}
+WindowBuilder3_args::~WindowBuilder3_args(){}
+
+BuildWindow_args::BuildWindow_args():Thread_args(){}
+
+BuildWindow_args::~BuildWindow_args(){}
+
+WindowBuilder3::WindowBuilder3():Tool(){}
 
 
-WindowBuilder2::WindowBuilder2():Tool(){}
-
-
-bool WindowBuilder2::Initialise(std::string configfile, DataModel &data){
+bool WindowBuilder3::Initialise(std::string configfile, DataModel &data){
 
   InitialiseTool(data);
   m_configfile=configfile;
@@ -17,7 +20,7 @@ bool WindowBuilder2::Initialise(std::string configfile, DataModel &data){
 
 
   m_util=new Utilities();
-  args=new WindowBuilder2_args();
+  args=new WindowBuilder3_args();
   LoadConfig();
   args->data=m_data;
   if(m_data->readout_windows==0) m_data->readout_windows=new std::deque<ReadoutWindow*>;
@@ -30,7 +33,7 @@ bool WindowBuilder2::Initialise(std::string configfile, DataModel &data){
 }
 
 
-bool WindowBuilder2::Execute(){
+bool WindowBuilder3::Execute(){
 
   if(m_data->change_config){
     InitialiseConfiguration(m_configfile);
@@ -45,7 +48,7 @@ bool WindowBuilder2::Execute(){
 }
 
 
-bool WindowBuilder2::Finalise(){
+bool WindowBuilder3::Finalise(){
 
   m_util->KillThread(args);
 
@@ -58,9 +61,9 @@ bool WindowBuilder2::Finalise(){
   return true;
 }
 
-void WindowBuilder2::Thread(Thread_args* arg){
+void WindowBuilder3::Thread(Thread_args* arg){
 
-  WindowBuilder2_args* args=reinterpret_cast<WindowBuilder2_args*>(arg);
+  WindowBuilder3_args* args=reinterpret_cast<WindowBuilder3_args*>(arg);
   //printf("d1\n");
   std::vector<unsigned int> erase_list;
   //printf("d2 size=%d\n",args->data->triggered_data.size());
@@ -70,26 +73,30 @@ void WindowBuilder2::Thread(Thread_args* arg){
   args->data->triggered_data.clear();
   //std::swap(args->data->triggered_data.begin(),myints+7, myvector.begin());
   args->data->triggered_data_mtx.unlock();
-  // printf("triggered size=%u\n", args->triggered_data.size());
-  /*  
+   printf("triggered size=%u\n", args->triggered_data.size());
+
+   std::vector<std::shared_ptr<MPMTData> > shared_ptrs;
+   /*  
   for(std::map<unsigned int, MPMTData*>::iterator it=args->triggered_data.begin(); it!=args->triggered_data.end(); it++){
    delete it->second;
     }
   args->triggered_data.clear();
-  */  
-  unsigned int subset=0;
+  */
+  
   for(std::map<unsigned int, MPMTData*>::iterator it=args->triggered_data.begin(); it!=args->triggered_data.end(); it++){
     //it->second->Print();
-    subset++;
-    if(subset>args->triggered_data.size()/5){
-      erase_list.push_back(it->first);
-      continue;
-    }
-    //it->second->Print();
     //    printf("d3 %d:%d\n",it->first,(args->data->current_coarse_counter >>22) - 500);
-    bool orphaned=it->first < (args->data->current_coarse_counter >>22) - 500;     
+    
+    while( (it->first > (args->data->current_coarse_counter >>22) - 500) && it->first!=0 && (!args->triggered_data.count(it->first +1)  && !(args->triggered_data.count(it->first -1)))) usleep(100);
+
+    
+    bool orphaned=it->first < (args->data->current_coarse_counter >>22) - 500;
+    bool first= it->first ==0;
+    bool pre_cluster=(args->triggered_data.count(it->first -1));
+    bool post_cluster= (args->triggered_data.count(it->first +1)); 
+    
     //if(orphaned) printf("orphaned\n");
-    if( args->triggered_data.count(it->first +1)  && (args->triggered_data.count(it->first -1) || it->first ==0)  || orphaned){
+							       //    if( args->triggered_data.count(it->first +1)  && (args->triggered_data.count(it->first -1) || it->first ==0)  || orphaned){
       
        //printf("d4\n");
       //////////////////merging triggers//////////////////////////
@@ -97,9 +104,10 @@ void WindowBuilder2::Thread(Thread_args* arg){
 	  return a.time < b.time;
 	});
        //printf("d5\n");
+      BuildWindow_args* job_args = new BuildWindow_args;
       
-      std::vector<std::vector<TriggerInfo*> >merged_triggers;
-      std::map<unsigned int, bool> trigger_veto;
+      //std::vector<std::vector<TriggerInfo*> >merged_triggers;
+      //std::map<unsigned int, bool> trigger_veto;
        //printf("d6\n");
       ////////////// finding MAIN and LED primaries ////////////////
       for(unsigned int i=0; i<it->second->unmerged_triggers.size(); i++){
@@ -107,11 +115,52 @@ void WindowBuilder2::Thread(Thread_args* arg){
 	if((it->second->unmerged_triggers.at(i).type==TriggerType::MAIN && args->offset_trigger.count(TriggerType::MAIN))|| (it->second->unmerged_triggers.at(i).type==TriggerType::LED && args->offset_trigger.count(TriggerType::LED))){
 	  std::vector<TriggerInfo*> tmp;
 	  tmp.push_back(&(it->second->unmerged_triggers.at(i)));
-	  trigger_veto[i]=true;
-	  merged_triggers.push_back(tmp);
+	  job_args->trigger_veto[i]=true;
+	  job_args->merged_triggers.push_back(tmp);
 	}
 	
       }
+							       
+							       
+      
+      //     BuildWindow_args* job_args = new BuildWindow_args;
+      job_args->data= args->data;
+      job_args->pre_cluster=pre_cluster;
+      job_args->post_cluster=post_cluster;
+
+      if(!pre_cluster) shared_ptrs.emplace_back(args->triggered_data[it->first]);
+      
+      if(pre_cluster){
+	job_args->triggered_data.push_back(shared_ptrs.back());
+      }
+
+      job_args->triggered_data.push_back(shared_ptrs.back());
+      printf("out size=%u\n", job_args->triggered_data.size());
+
+      if(post_cluster){
+	shared_ptrs.emplace_back(args->triggered_data[it->first+1]);	
+	job_args->triggered_data.push_back(shared_ptrs.back());
+      }
+
+      for(int i=0; i<job_args->merged_triggers.size(); i++){
+	if(job_args->merged_triggers.at(i).at(0)->type==TriggerType::MAIN){
+	  job_args->tdc_hits = args->data->tdc_readout.getEvent();
+	  job_args->qdc_hits = args->data->qdc_readout.getEvent();
+	}
+      }
+	Job* tmp_job = new Job("windowbuilder");
+	tmp_job->data=job_args;
+	tmp_job->func=BuildWindow;
+	printf("job pointer = %p\n",tmp_job);
+	//args->data->job_queue.AddJob(tmp_job);
+	delete tmp_job;
+	delete job_args;
+  
+      if(orphaned) erase_list.push_back(it->first);
+      else if(it->first !=0) erase_list.push_back(it->first - 1); 
+
+  }
+  /*
  //printf("d8\n");
       ///////////////////////////// assosiating others with primaries //////////////
       for(unsigned int i=0; i<it->second->unmerged_triggers.size(); i++){
@@ -185,7 +234,7 @@ void WindowBuilder2::Thread(Thread_args* arg){
       */
       
       //////////////////////////////////////////////////
-              
+      /*        
       //////////////////////////// collecting data////////////////////////
        //printf("d11\n");
       //printf("triggers size=%u\n", merged_triggers.size());      
@@ -233,7 +282,7 @@ if( it->second->unmerged_triggers.at(merged_triggers.at(i).at(j)).time + args->o
 	  /////////////////////////////////////////////
 	   //printf("d13\n");
 	  ///////////////////////// collecting mpmt_hits//////////////////////
-      
+      /*
 	  std::vector<WCTEMPMTHit>::iterator start_hit;
 	  std::vector<WCTEMPMTHit>::iterator stop_hit;
 	  bool fill=false;
@@ -370,35 +419,36 @@ if( it->second->unmerged_triggers.at(merged_triggers.at(i).at(j)).time + args->o
 	/// ///////////// finished collecting data /////////////////////////////
 	
 	
+	*/
 	
 	//////////////////////////////////////////////////////////////////////////
 	 //printf("d18\n");
 	//adding readout window
 	 //printf("d18.1 pointer =%p\n", tmp_readout);
-	args->data->readout_windows_mtx.lock();
+      //	args->data->readout_windows_mtx.lock();
 	 //printf("d18.2\n");
 	 //printf("d18.3 size=%d\n", args->data->readout_windows->size());
 	//tmp_readout->Print();
-	args->data->readout_windows->push_back(tmp_readout);
+	//	args->data->readout_windows->push_back(tmp_readout);
 	 //printf("d18.4\n");
-	args->data->readout_windows_mtx.unlock();
+      //args->data->readout_windows_mtx.unlock();
 	//delete tmp_readout;
 	//printf("d19\n");
-	
+  /*	
       }
       if(orphaned) erase_list.push_back(it->first);
       else if(it->first !=0) erase_list.push_back(it->first - 1); ///BEN!!!! THIS NEEDS CHECKING
       //printf("d20\n");
   }
     
-  }
+  //}
   
   //printf("d21\n");
   /// deleting data;
-
+  */
   for (std::vector<unsigned int>::iterator it=erase_list.begin(); it!=erase_list.end(); it++){
     //printf("d22\n");
-    delete args->triggered_data[*it];
+    //    delete args->triggered_data[*it];
     args->triggered_data[*it]=0;
 
     args->triggered_data.erase(*it);
@@ -406,13 +456,13 @@ if( it->second->unmerged_triggers.at(merged_triggers.at(i).at(j)).time + args->o
   }
   //printf("d23\n");
   erase_list.clear();
-  //printf("d24\n");
-
-  
+  printf("d24\n");
+  shared_ptrs.clear();
+  printf("d24\n"); 
 
 }
 
-void WindowBuilder2::LoadConfig(){
+void WindowBuilder3::LoadConfig(){
 
     if(!m_variables.Get("verbose",m_verbose)) m_verbose=1;
 
@@ -536,5 +586,52 @@ void WindowBuilder2::LoadConfig(){
       args->offset_trigger[TriggerType::MAIN]=main_offset_trigger;
     }
     
-    
+}
+
+bool WindowBuilder3::BuildWindow(void* data){
+
+ BuildWindow_args* args=reinterpret_cast<BuildWindow_args*>(data);
+ 
+ // for (int i=0; i<args->triggered_data.size(); i++){
+ printf("u1 Pre,post,size %d,%d,%u\n",args->pre_cluster,args->post_cluster,args->triggered_data.size());
+
+ /*if(args->pre_cluster){
+ printf("u1.1\n");
+    delete args->triggered_data.at(0);
+ printf("u1.2\n");
+   args->triggered_data.at(0)=0;
+ printf("u1.3\n");
+ }
+  printf("u1.5\n");
+ if(!args->post_cluster){
+ printf("u1.6\n");
+   delete args->triggered_data.at(args->triggered_data.size()-1);
+ printf("u1.7\n");
+   args->triggered_data.at(args->triggered_data.size()-1)=0;
+ printf("u1.8\n");
+ }
+ */
+ printf("u2\n");
+ args->triggered_data.clear();
+  printf("u2.1\n");
+ /* 
+ for (int i=0; i<args->merged_triggers.size(); i++){
+   for (int j=0; j<args->merged_triggers.at(i).size(); j++){
+ printf("u3\n");
+     delete args->merged_triggers.at(i).at(j);
+ printf("u4\n");
+   }
+   args->merged_triggers.at(i).clear();
+ }
+ args->merged_triggers.clear();
+ */
+ args->data=0;
+ printf("u5\n");
+ // delete args;
+  printf("u6\n");
+ args=0;
+ 
+ return true;
+
+ 
 }

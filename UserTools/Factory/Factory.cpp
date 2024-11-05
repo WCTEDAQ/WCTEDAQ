@@ -28,6 +28,7 @@ if (tool=="V812") ret=new V812;
 if (tool=="VMEReceive") ret=new VMEReceive;
 if (tool=="VMESend") ret=new VMESend;
 if (tool=="VMETest") ret=new VMETest;
+if (tool=="WindowBuilder3") ret=new WindowBuilder3;
 if (tool=="WindowBuilder2") ret=new WindowBuilder2;
-return ret;
+ return ret;
 }

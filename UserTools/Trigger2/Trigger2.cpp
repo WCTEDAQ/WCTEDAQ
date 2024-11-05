@@ -74,14 +74,23 @@ void Trigger2::Thread(Thread_args* arg){
      return;
   }
    //printf("d1.5\n");
-   args->data->sorted_data_mtx.unlock();
   //printf("d2\n");
-  std::map<unsigned int, MPMTData*> sorted_data;
-  args->data->sorted_data_mtx.lock();
-  std::swap(sorted_data , args->data->sorted_data);
-  args->data->sorted_data_mtx.unlock();
+   std::map<unsigned int, MPMTData*> sorted_data;
+   
+   std::swap(sorted_data , args->data->sorted_data);
+   args->data->sorted_data_mtx.unlock();
    //printf("d3\n");
 
+   /*
+  for(std::map<unsigned int, MPMTData*>::iterator it= sorted_data.begin(); it!=sorted_data.end(); it++){
+    
+    delete it->second;
+    it->second=0;
+  }
+  sorted_data.clear();
+   */
+   
+  
    if(args->triggers.size()==0){
        ////////////////////
 
@@ -103,7 +112,7 @@ void Trigger2::Thread(Thread_args* arg){
        tmp_args->sorted_data = it->second;
        //printf("d5 size=%d\n",args->triggers.size());
 
-	for(int j=0; j<args->triggers.size(); j++){
+	for(unsigned int j=0; j<args->triggers.size(); j++){
 	  //printf("d5.1 trigger=%s\n",args->triggers.at(j).c_str());
 	  //printf("d5.2 count=%d\n",args->data->trigger_functions.count(args->triggers.at(j).c_str()));
 	  if(args->data->trigger_functions.count(args->triggers.at(j).c_str())>0){
@@ -114,16 +123,35 @@ void Trigger2::Thread(Thread_args* arg){
 	    tmp_algo_args->trigger_vars = args->data->trigger_vars[args->triggers.at(j)];
 	    tmp_args->trigger_algo_args.push_back(tmp_algo_args);
 	  }
-       }
+	}
        //printf("d6\n");
        tmp_job->func=TriggerJob;
        tmp_job->data=tmp_args;
        //printf("d6.2 pointerin=%p\n", tmp_args);
        args->data->job_queue.AddJob(tmp_job);
+
+       /*
+	 printf("d6.3\n");
+       for(unsigned int k=0; k<tmp_args->trigger_algo_args.size(); k++){
+	 //delete tmp_args->trigger_algo_args.at(k).sorted_data;
+	 printf("d6.3a\n");
+	 delete	tmp_args->trigger_algo_args.at(k);
+	 printf("d6.3b\n");
+	 tmp_args->trigger_algo_args.at(k)=0;
+	 printf("d6.3c\n");
+       }
+       printf("d6.4\n");
+       delete tmp_args->sorted_data;
+       printf("d6.5\n");
+       delete tmp_args;
+       printf("d6.6\n");
+       delete tmp_job;
+       printf("d6.7\n");
+       */
      }
      
    }
-   
+  
    //printf("d7\n");
 }
 
@@ -132,18 +160,21 @@ bool Trigger2::TriggerJob(void* data){
   Trigger2_args* args=reinterpret_cast<Trigger2_args*>(data);
   //printf("r2\n");
   //printf("r2.1 size=%d\n",args->trigger_functions.size());
-  for(int i=0; i<args->trigger_functions.size(); i++){
+  for(unsigned int i=0; i<args->trigger_functions.size(); i++){
     //printf("r3\n");
     args->trigger_functions.at(i)(args->trigger_algo_args.at(i));
     //printf("r4\n");
+ delete args->trigger_algo_args.at(i);
   }
   //printf("r5\n");
   args->data->triggered_data_mtx.lock();
   //printf("r6\n");
+  // delete  args->sorted_data;
   args->data->triggered_data[args->bin] = args->sorted_data;
   //printf("r7\n");
   args->data->triggered_data_mtx.unlock();
   //printf("r8\n");
+  delete args;
   
   return true;
   

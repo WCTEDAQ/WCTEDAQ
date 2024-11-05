@@ -2,10 +2,10 @@ Configuration Configuration NUll
 RunControl  RunControl Null
 JobManager JobManager Null
 MPMT MPMT2 Null
-#VMEReceive VMEReceive Null
-#Sorting Sorting2 Null
-#Nhits Nhits Null
-#Trigger Trigger2 Null
-#WindowBuilder WindowBuilder2 Null
-#Monitoring Monitoring Null
-#FileWriter FileWriter Null
+VMEReceive VMEReceive Null
+Sorting Sorting2 Null
+Nhits Nhits Null
+Trigger Trigger2 Null
+WindowBuilder WindowBuilder2 Null
+Monitoring Monitoring Null
+FileWriter FileWriter Null

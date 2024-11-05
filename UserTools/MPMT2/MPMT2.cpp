@@ -185,7 +185,7 @@ void MPMT2::Thread(Thread_args* arg){
     args->m_data->monitoring_store.Set("connected_MPMTs",num_connections);
     args->m_data->monitoring_store_mtx.unlock();
     args->last= boost::posix_time::microsec_clock::universal_time();
-    //printf("conenctions=%d\n",args->connections.size());
+    printf("conenctions=%d\n",args->connections.size());
   }
   
   zmq::poll(&(args->items[0]), 1, 100);
@@ -286,9 +286,24 @@ bool MPMT2::ProcessData(void* data){
   unsigned short card_type = daq_header->GetCardType();
   unsigned long bytes=msgs->mpmt_data->size();
   unsigned long current_byte=0;
-  //printf("d2 car_id=%d\n", card_id);
+
+  if(bin< ((msgs->m_data->current_coarse_counter >>22) - 500) || bin > ((msgs->m_data->current_coarse_counter >>22) + 500)){ //~2 seconds seconds away from current time (60 x ~33.5ms)
+
+    std::string tmp="ERROR: Data from MPMT" +  std::to_string(card_id)  +" is out of temporal threshold, maybe desynced";
+    msgs->m_data->services->SendLog(tmp,0);
+    delete msgs->daq_header;
+    msgs->daq_header=0;
+    delete msgs->mpmt_data;
+    msgs->mpmt_data=0;
+    delete msgs;
+    msgs=0;
+    return false;                 
+    
+  }
+
+  //    printf("d2 car_id=%d\n", card_id);
   //  daq_header->Print();
-  std::map<unsigned int, MPMTData> local_data;
+  std::map<unsigned int, MPMTData*> local_data;
   /*  std::vector<WCTEMPMTHit> vec_mpmt_hit;
   std::vector<WCTEMPMTLED> vec_mpmt_led;
   std::vector<WCTEMPMTPPS> vec_mpmt_pps;
@@ -316,20 +331,24 @@ bool MPMT2::ProcessData(void* data){
 	unsigned int tmp_bin = (daq_header->GetCoarseCounter() & 4294901760U ) | (tmp.GetCoarseCounter() >>16);
 	if((daq_header->GetCoarseCounter() & 65535U) > (tmp.GetCoarseCounter() >>16)) tmp_bin +=65536U;
 	tmp_bin = tmp_bin >> 6;
+	if(!local_data.count(tmp_bin)){
+	  local_data[tmp_bin] = new MPMTData();
+	  local_data[tmp_bin]->coarse_counter=tmp_bin<<6;
+	}
 	//printf("cardtype=%u\n",card_type);
-	 //printf("cardchannel=%u\n",tmp.GetChannel());
+	// printf("cardchannel=%u\n",tmp.GetChannel());
 	if(card_type==3U){
 	  if(tmp.GetChannel() < 10){
 	    //printf("its a trigger\n");
-	    local_data[tmp_bin].mpmt_triggers.push_back(tmp);
+	    local_data[tmp_bin]->mpmt_triggers.push_back(tmp);
 	  }
 	  else {
-	    local_data[tmp_bin].extra_hits.push_back(tmp);
+	    local_data[tmp_bin]->extra_hits.push_back(tmp);
 	    //printf("its an extra trigger=hit\n");
 	  }
 	}
 	else{
-	  local_data[tmp_bin].mpmt_hits.push_back(tmp);
+	  local_data[tmp_bin]->mpmt_hits.push_back(tmp);
 	  //printf("its a normal hit\n");
 	}
       }
@@ -345,7 +364,11 @@ bool MPMT2::ProcessData(void* data){
 	unsigned int tmp_bin = (daq_header->GetCoarseCounter() & 4294901760U ) | (tmp.GetCoarseCounter() >>16);
         if((daq_header->GetCoarseCounter() & 65535U) > (tmp.GetCoarseCounter() >>16)) tmp_bin +=65536U;
 	tmp_bin = tmp_bin >> 6;
-	local_data[tmp_bin].mpmt_leds.push_back(tmp);
+	if(!local_data.count(tmp_bin)){
+	  local_data[tmp_bin] = new MPMTData();
+	  local_data[tmp_bin]->coarse_counter=tmp_bin<<6;
+	}
+	  local_data[tmp_bin]->mpmt_leds.push_back(tmp);
       }
       
       //      else if(((mpmt_data[current_byte] >> 2) & 0b00001111 ) == 3U){
@@ -365,7 +388,12 @@ bool MPMT2::ProcessData(void* data){
       }
       else{
 	 //printf("none of hit LED or pps despite saying it is\n");
-	 std::string tmp="ERROR: Data from MPMT" +  std::to_string(card_id)  +" is courupt or of uknown structure";
+	std::string tmp="ERROR: Data from MPMT" +  std::to_string(card_id)  +" is courupt or of uknown structure";
+	 for(std::map<unsigned int, MPMTData*>::iterator it=local_data.begin(); it!=local_data.end(); it++){
+	   delete it->second;
+	   it->second=0;
+	 }
+	 local_data.clear();
 	 msgs->m_data->services->SendLog(tmp,0);
 	 delete msgs->daq_header;
 	 msgs->daq_header=0;
@@ -404,8 +432,12 @@ bool MPMT2::ProcessData(void* data){
 	unsigned int tmp_bin = (daq_header->GetCoarseCounter() & 4294901760U ) | (tmp.header.GetCoarseCounter() >>16);
 	if((daq_header->GetCoarseCounter() & 65535U) > (tmp.header.GetCoarseCounter() >>16)) tmp_bin +=65536U;
 	tmp_bin = tmp_bin >> 6;
-	if(card_type!=3U) local_data[tmp_bin].mpmt_waveforms.push_back(tmp);
-	if(card_type==3U && tmp.header.GetChannel() >= 10) local_data[tmp_bin].extra_waveforms.push_back(tmp);
+	if(!local_data.count(tmp_bin)){
+	  local_data[tmp_bin] = new MPMTData();
+	  local_data[tmp_bin]->coarse_counter=tmp_bin<<6;
+	}
+	  if(card_type!=3U) local_data[tmp_bin]->mpmt_waveforms.push_back(tmp);
+	if(card_type==3U && tmp.header.GetChannel() >= 10) local_data[tmp_bin]->extra_waveforms.push_back(tmp);
 
     }
     else{
@@ -415,7 +447,12 @@ bool MPMT2::ProcessData(void* data){
       //printf("(mpmt_data[current_byte] >> 6)%u\n", (mpmt_data[current_byte] >> 6));
       
       std::string tmp="ERROR: Waveform data from MPMT" +  std::to_string(card_id)  +" is courupt or of uknown structure.";
-      msgs->m_data->services->SendLog(tmp,0);      
+      msgs->m_data->services->SendLog(tmp,0);
+      for(std::map<unsigned int, MPMTData*>::iterator it=local_data.begin(); it!=local_data.end(); it++){
+	delete it->second;
+	it->second=0;
+      }
+      local_data.clear();
       delete msgs->daq_header;
       msgs->daq_header=0;
       delete msgs->mpmt_data;
@@ -432,69 +469,84 @@ bool MPMT2::ProcessData(void* data){
   ////adding data to datamodel
   ////////////////////////////////////////////////////
    //printf("d5\n");
-  /*  
+    
   msgs->m_data->unsorted_data_mtx.lock();
-  for(std::map<unsigned int, MPMTData>::iterator it=local_data.begin(); it!=local_data.end(); it++){
+  for(std::map<unsigned int, MPMTData*>::iterator it=local_data.begin(); it!=local_data.end(); it++){
     //printf("d6\n");
+    //printf("time %u:MPMT%u:current=%u\n", it->first, card_id, ((msgs->m_data->current_coarse_counter >>22) - 60));
     //    it->second.Print();
     //   msgs->m_data->unsorted_data_mtx.lock();
     if(msgs->m_data->unsorted_data.count(it->first)==0){
-      msgs->m_data->unsorted_data[it->first]=new MPMTData();
-      msgs->m_data->unsorted_data[it->first]->coarse_counter=(it->first<<6);
+      msgs->m_data->unsorted_data[it->first]=it->second;
+      it->second=0;
+
+      /*
+      delete msgs->m_data->unsorted_data[it->first];
+      msgs->m_data->unsorted_data[it->first]=0;
+      msgs->m_data->unsorted_data.erase(it->first);
+      */
+      continue;
+      //      msgs->m_data->unsorted_data[it->first]=new MPMTData();
+      // msgs->m_data->unsorted_data[it->first]->coarse_counter=(it->first<<6);
     }
     //msgs->m_data->unsorted_data_mtx.unlock();
     
-    if(it->second.mpmt_hits.size() > 0){
+    if(it->second->mpmt_hits.size() > 0){
       msgs->m_data->unsorted_data[it->first]->mpmt_hits_mtx.lock();
-      msgs->m_data->unsorted_data[it->first]->mpmt_hits.insert( msgs->m_data->unsorted_data[it->first]->mpmt_hits.end(), it->second.mpmt_hits.begin(), it->second.mpmt_hits.end());
+      msgs->m_data->unsorted_data[it->first]->mpmt_hits.insert( msgs->m_data->unsorted_data[it->first]->mpmt_hits.end(), it->second->mpmt_hits.begin(), it->second->mpmt_hits.end());
        msgs->m_data->unsorted_data[it->first]->mpmt_hits_mtx.unlock();
     }
-    if(it->second.mpmt_leds.size() > 0){
+    if(it->second->mpmt_leds.size() > 0){
       msgs->m_data->unsorted_data[it->first]->mpmt_leds_mtx.lock();
-      msgs->m_data->unsorted_data[it->first]->mpmt_leds.insert( msgs->m_data->unsorted_data[it->first]->mpmt_leds.end(), it->second.mpmt_leds.begin(), it->second.mpmt_leds.end());
+      msgs->m_data->unsorted_data[it->first]->mpmt_leds.insert( msgs->m_data->unsorted_data[it->first]->mpmt_leds.end(), it->second->mpmt_leds.begin(), it->second->mpmt_leds.end());
       msgs->m_data->unsorted_data[it->first]->mpmt_leds_mtx.unlock();
     }
-    if(it->second.mpmt_waveforms.size() > 0){
+    if(it->second->mpmt_waveforms.size() > 0){
       msgs->m_data->unsorted_data[it->first]->mpmt_waveforms_mtx.lock();
-      msgs->m_data->unsorted_data[it->first]->mpmt_waveforms.insert( msgs->m_data->unsorted_data[it->first]->mpmt_waveforms.end(), it->second.mpmt_waveforms.begin(), it->second.mpmt_waveforms.end());
+      msgs->m_data->unsorted_data[it->first]->mpmt_waveforms.insert( msgs->m_data->unsorted_data[it->first]->mpmt_waveforms.end(), it->second->mpmt_waveforms.begin(), it->second->mpmt_waveforms.end());
       msgs->m_data->unsorted_data[it->first]->mpmt_waveforms_mtx.unlock();
     }
     
-    if(it->second.mpmt_triggers.size() > 0){
+    if(it->second->mpmt_triggers.size() > 0){
       msgs->m_data->unsorted_data[it->first]->mpmt_triggers_mtx.lock();
-      msgs->m_data->unsorted_data[it->first]->mpmt_triggers.insert( msgs->m_data->unsorted_data[it->first]->mpmt_triggers.end(), it->second.mpmt_triggers.begin(), it->second.mpmt_triggers.end());
+      msgs->m_data->unsorted_data[it->first]->mpmt_triggers.insert( msgs->m_data->unsorted_data[it->first]->mpmt_triggers.end(), it->second->mpmt_triggers.begin(), it->second->mpmt_triggers.end());
       msgs->m_data->unsorted_data[it->first]->mpmt_triggers_mtx.unlock();
       ///////////////////// send alert to evgeni for beam spill ////////////////
       
-      for(int i=0; i<it->second.mpmt_triggers.size(); i++){
+      for(int i=0; i<it->second->mpmt_triggers.size(); i++){
 	std::string tmp="{\"Spill\":"+ std::to_string(msgs->m_data->spill_num)  + "}";
-	if(it->second.mpmt_triggers.at(i).GetChannel()==4U) msgs->m_data->services->AlertSend("SpillCount", tmp);
+	if(it->second->mpmt_triggers.at(i).GetChannel()==4U) msgs->m_data->services->AlertSend("SpillCount", tmp);
       }
       ///////////////////////////
     }
 
-    //if(it->second.mpmt_pps.size() > 0) msgs->m_data->unsorted_data[it->first]->mpmt_pps.insert( msgs->m_data->unsorted_data[it->first]->mpmt_pps.end(), it->second.mpmt_pps.begin(), it->second.mpmt_pps.end());
-    if(it->second.extra_hits.size() > 0){
+    //if(it->second->mpmt_pps.size() > 0) msgs->m_data->unsorted_data[it->first]->mpmt_pps.insert( msgs->m_data->unsorted_data[it->first]->mpmt_pps.end(), it->second->mpmt_pps.begin(), it->second->mpmt_pps.end());
+    if(it->second->extra_hits.size() > 0){
       msgs->m_data->unsorted_data[it->first]->extra_hits_mtx.lock();
-      msgs->m_data->unsorted_data[it->first]->extra_hits.insert( msgs->m_data->unsorted_data[it->first]->extra_hits.end(), it->second.extra_hits.begin(), it->second.extra_hits.end());
+      msgs->m_data->unsorted_data[it->first]->extra_hits.insert( msgs->m_data->unsorted_data[it->first]->extra_hits.end(), it->second->extra_hits.begin(), it->second->extra_hits.end());
       msgs->m_data->unsorted_data[it->first]->extra_hits_mtx.unlock();
     }
-    if(it->second.extra_waveforms.size() > 0){
+    if(it->second->extra_waveforms.size() > 0){
       msgs->m_data->unsorted_data[it->first]->extra_waveforms_mtx.lock();
-      msgs->m_data->unsorted_data[it->first]->extra_waveforms.insert( msgs->m_data->unsorted_data[it->first]->extra_waveforms.end(), it->second.extra_waveforms.begin(), it->second.extra_waveforms.end());
+      msgs->m_data->unsorted_data[it->first]->extra_waveforms.insert( msgs->m_data->unsorted_data[it->first]->extra_waveforms.end(), it->second->extra_waveforms.begin(), it->second->extra_waveforms.end());
       msgs->m_data->unsorted_data[it->first]->extra_waveforms_mtx.unlock();
     }
   
-  
+
+    delete it->second;
+    it->second=0;
+
+    /*
     delete msgs->m_data->unsorted_data[it->first];
     msgs->m_data->unsorted_data[it->first]=0;
     msgs->m_data->unsorted_data.erase(it->first);
+    */
   } 
   //printf("d7\n");
   msgs->m_data->unsorted_data_mtx.unlock();
   //printf("d8\n");
     //printf("in send unsorted triggercard\n");
-    */
+   
   //printf("d9\n");
   //  msgs->m_data->unsorted_data[bin]->Print();
   //printf("d10\n");

@@ -21,4 +21,5 @@
 #include <VMEReceive.h>
 #include <VMESend.h>
 #include <VMETest.h>
+#include <WindowBuilder3.h>
 #include <WindowBuilder2.h>
