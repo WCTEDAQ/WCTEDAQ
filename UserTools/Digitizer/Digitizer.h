@@ -20,7 +20,13 @@ class Digitizer: public ToolFramework::Tool {
     bool acquiring() const { return acquiring_; };
 
   protected:
-    using Event = std::vector<Hit>;
+    struct Event {
+      std::vector<Hit> hits;
+      std::unique_ptr<std::mutex> mutex;
+
+      Event(): mutex(new std::mutex()) {};
+      Event(Event&& event): mutex(std::move(event.mutex)) {};
+    };
 
     template <typename RawEvent>
     class Chops {
@@ -54,14 +60,16 @@ class Digitizer: public ToolFramework::Tool {
     ) = 0;
 
     // Processes the data read from board `board_index`. The data shall be
-    // converted to hits and stored in the result of `get_event` which takes an
-    // event number and returns a vector of hits.
-    // This method if called from the worker job queues
+    // converted to hits and stored in the result of `get_event` which
+    // takes an event number and returns an event associated with this event
+    // number. The event has a vector of hits to be filled by this function and
+    // a mutex which should be locked while the vector is being changed.
+    // This method is called from the worker job queues.
     virtual void process(
-      size_t                                  cycle,
-      const std::function<Event& (uint32_t)>& get_event,
-      unsigned                                board_index,
-      std::vector<Packet>                     board_data
+        size_t                                  cycle,
+        const std::function<Event& (uint32_t)>& get_event,
+        unsigned                                board_index,
+        std::vector<Packet>                     board_data
     ) = 0;
 
   private:
@@ -165,12 +173,10 @@ bool Digitizer<Packet, Hit>::process(Readout readout) {
             // XXX: assuming no overflow of the event number
             if (max_event[iboard] == ~0U || max_event[iboard] < ievent)
               max_event[iboard] = ievent;
-            std::lock_guard<std::mutex> events_lock(events_mutex);
+            std::lock_guard<std::mutex> lock(events_mutex);
             auto pevent = events.lower_bound(ievent);
-            if (pevent == events.end() || pevent->first != ievent) {
+            if (pevent == events.end() || pevent->first != ievent)
               pevent = events.insert(pevent, { ievent, Event() });
-              pevent->second.reserve(16);
-            };
             return pevent->second;
           },
           iboard,
@@ -249,36 +255,36 @@ void Digitizer<Packet, Hit>::submit(
     typename std::map<uint32_t, Event>::iterator begin,
     typename std::map<uint32_t, Event>::iterator end
 ) {
-  class values_iterator {
+  class hits_iterator {
     public:
-      values_iterator(typename std::map<uint32_t, Event>::iterator iterator):
+      hits_iterator(typename std::map<uint32_t, Event>::iterator iterator):
         iterator(iterator)
       {};
 
-      bool operator!=(const values_iterator& i) {
+      bool operator!=(const hits_iterator& i) {
         return iterator != i.iterator;
       };
 
-      values_iterator& operator++() {
+      hits_iterator& operator++() {
         ++iterator;
         return *this;
       };
 
-      values_iterator  operator++(int) {
-        values_iterator i(iterator);
+      hits_iterator  operator++(int) {
+        hits_iterator i(iterator);
         ++iterator;
         return i;
       };
 
-      Event& operator*() const {
-        return iterator->second;
+      std::vector<Hit>& operator*() const {
+        return iterator->second.hits;
       };
 
     public:
       typename std::map<uint32_t, Event>::iterator iterator;
   };
 
-  output->push(values_iterator(begin), values_iterator(end));
+  output->push(hits_iterator(begin), hits_iterator(end));
 };
 
 template <typename Packet, typename Hit>

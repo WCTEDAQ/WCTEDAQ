@@ -385,14 +385,15 @@ void V1290::process(
 
 void V1290::process(
     const std::function<Event& (uint32_t)>& get_event,
-    RawEvent& raw_event
+    RawEvent& raw
 ) {
-  Event& event = get_event(raw_event.header.event());
-  event.reserve(event.size() + raw_event.hits.size());
-  for (auto& hit : raw_event.hits)
-    event.push_back(
-        TDCHit(raw_event.header, hit, raw_event.ettt, raw_event.trailer)
-    );
+  Event& event = get_event(raw.header.event());
+
+  std::lock_guard<std::mutex> lock(*event.mutex);
+  size_t n = event.hits.size();
+  event.hits.reserve(n + raw.hits.size());
+  for (auto& hit : raw.hits)
+    event.hits.emplace_back(raw.header, hit, raw.ettt, raw.trailer);
 };
 
 void V1290::readout(

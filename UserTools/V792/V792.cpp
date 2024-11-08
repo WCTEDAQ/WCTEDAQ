@@ -309,7 +309,10 @@ void V792::process(
     if (ptrailer < qdc_data.end()) {
       auto trailer = ptrailer->as<caen::V792::EndOfBlock>();
       process(
-          get_event, header, static_cast<caen::V792::Data*>(&*packet), trailer
+          get_event,
+          header,
+          static_cast<caen::V792::Data*>(&*packet),
+          trailer
       );
       packet = ptrailer;
       ++packet;
@@ -345,12 +348,14 @@ void V792::process(
 void V792::process(
     const std::function<Event& (uint32_t)>& get_event,
     caen::V792::Header                      header,
-    caen::V792::Data*                       hits,
+    caen::V792::Data*                       data,
     caen::V792::EndOfBlock                  trailer
 ) {
-  uint8_t n = header.count();
   Event& event = get_event(trailer.event());
-  event.reserve(event.size() + n);
-  for (uint8_t i = 0; i < n; ++i)
-    event.push_back(QDCHit(header, hits[i], trailer));
+  uint8_t nhits = header.count();
+
+  std::lock_guard<std::mutex> lock(*event.mutex);
+  size_t n = event.hits.size();
+  event.hits.reserve(n + nhits);
+  while (nhits--) event.hits.emplace_back(header, *data++, trailer);
 };
