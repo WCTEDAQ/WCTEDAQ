@@ -21,6 +21,7 @@ void V792::connect() {
   for (auto& connection : connections) {
     caen_report_connection(*m_log << ML(3), "V792", connection);
     Board board { caen::V792(connection) };
+    board.vme_address = connection.vme;
     uint16_t firmware = board.qdc.firmware_revision();
     *m_log
       << ML(3)
@@ -34,7 +35,6 @@ void V792::connect() {
         << ML(2)
         << "V792: old firmware detected, using FIFOBLT for readout"
         << std::endl;
-      board.vme_address = connection.vme;
       board.vme_handle  = board.qdc.vme_handle();
       board.readout     = readout_fifoblt;
     } else {
