@@ -21,7 +21,9 @@ bool Monitoring::Initialise(std::string configfile, DataModel &data){
   args=new Monitoring_args();
   args->last =  boost::posix_time::microsec_clock::universal_time();
   args->data = m_data;
-
+  args->last2 =  boost::posix_time::microsec_clock::universal_time();
+  args->period2 =  boost::posix_time::seconds(1);
+  
   LoadConfig();
 
   
@@ -40,6 +42,24 @@ bool Monitoring::Execute(){
     LoadConfig();
     ExportConfiguration();
   }
+  if(m_data->run_start){
+    
+    for(std::map<std::string, unsigned int>::iterator it= args->data->hit_map.begin(); it!=args->data->hit_map.end(); it++){
+      args->data->hit_map[it->first]=0; 
+      
+    }
+  }
+ 
+  std::stringstream tmp;
+  std::string runinfo="";
+  unsigned long part=0;
+  unsigned long workers=0;
+  m_data->vars.Get("Runinfo",runinfo);
+  m_data->vars.Get("part",part);
+  m_data->monitoring_store.Get("pool_threads",workers);
+  
+  tmp<< runinfo<<" buffers: unsorted| sorted| triggered| readout = "<<m_data->unsorted_data.size()<<"| "<<m_data->sorted_data.size()<<"| "<<m_data->triggered_data.size()<<"| "<<m_data->readout_windows->size()<<" (files="<<part<<") jobs:workers = "<<m_data->job_queue.size()<<":"<<workers<<" ["<<m_data->data_chunks.size()<<":"<<m_data->out_data_chunks->size()<<"]";
+  m_data->vars.Set("Status",tmp.str());
   
   return true;
 }
@@ -61,6 +81,29 @@ bool Monitoring::Finalise(){
 void Monitoring::Thread(Thread_args* arg){
 
   Monitoring_args* args=reinterpret_cast<Monitoring_args*>(arg);
+
+
+  
+  args->lapse2 = args->period2 -( boost::posix_time::microsec_clock::universal_time() - args->last2);
+  
+  if(args->lapse.is_negative() ){
+    unsigned int tmp=0;
+   
+    for(std::map<std::string, unsigned int>::iterator it= args->data->hit_map.begin(); it!=args->data->hit_map.end(); it++){
+      args->hit_rates.Get(it->first,tmp);
+      tmp = it->second - tmp;
+      args->hit_rates.Set(it->first,tmp);
+      //      args->hit_rates.Print();
+    }
+    std::string json="";
+    args->hit_rates>>json;
+
+    args->data->services->SendMonitoringData(json,"hit_rates");
+    
+    args->last2 = boost::posix_time::microsec_clock::universal_time();
+  
+  }
+  
   
   args->lapse = args->period -( boost::posix_time::microsec_clock::universal_time() - args->last);
   //std::cout<< m_lapse<<std::endl;

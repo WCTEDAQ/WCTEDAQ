@@ -110,7 +110,7 @@ public:
       //printf("n5b %u\n",header.GetNumSamples());
       //printf("n5c %u\n",header.GetLength());
       //header.Print();
-      memcpy(samples.data(), &in_data[10], sizeof(samples.data())); 
+      memcpy(samples.data(), &in_data[10], sizeof(unsigned char)* header.GetLength()); 
       //printf("n6\n");
     }
   }

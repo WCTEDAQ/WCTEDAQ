@@ -46,8 +46,19 @@ class LED: public Tool {
  private:
 
   static void Thread(Thread_args* arg); ///< Function to be run by the thread in a loop. Make sure not to block in it
+  bool LoadSequence(int version=-1);
+  void LoadConfig();
   Utilities* m_util;  ///< Pointer to utilities class to help with threading
   LED_args* args; ///< thread args (also holds pointer to the thread)
+
+  std::vector<Store> firing_sequence;
+  unsigned int sequence_num;
+
+  boost::posix_time::time_duration period;
+  boost::posix_time::ptime last;
+  boost::posix_time::time_duration lapse;
+
+  std::string m_configfile;
 
 };
 

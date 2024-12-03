@@ -1,5 +1,5 @@
-#ifndef Monitoring_H
-#define Monitoring_H
+#ifndef ProcessData_H
+#define ProcessData_H
 
 #include <string>
 #include <iostream>
@@ -8,7 +8,7 @@
 #include "DataModel.h"
 
 /**
- * \struct Monitoring_args_args
+ * \struct ProcessData_args_args
  *
  * This is a struct to place data you want your thread to access or exchange with it. The idea is the datainside is only used by the threa\d and so will be thread safe
  *
@@ -16,24 +16,20 @@
  * $Date: 2019/05/28 10:44:00 $
  */
 
-struct Monitoring_args:Thread_args{
+struct ProcessData_args:Thread_args{
 
-  Monitoring_args();
-  ~Monitoring_args();
-  
-  boost::posix_time::time_duration period;
-  boost::posix_time::time_duration lapse;
-  boost::posix_time::ptime last;
-  boost::posix_time::time_duration period2;
-  boost::posix_time::time_duration lapse2;
-  boost::posix_time::ptime last2;
-  Store hit_rates;
+  ProcessData_args();
+  ~ProcessData_args();
   DataModel* data;
-
+  //  std::map<TriggerType, unsigned long> pre_trigger;
+  std::map<unsigned int, MPMTCollection*> local_chunks;
+  //  std::map<TriggerType, unsigned long> post_trigger;
+  //std::map<TriggerType, long> offset_trigger;
+  //std::map<unsigned int, MPMTData*> triggered_data;
 };
 
 /**
- * \class Monitoring
+ * \class ProcessData
  *
  * This is a template for a Tool that produces a single thread that can be assigned a function seperate to the main thread. Please fill out the descripton and author information.
 *
@@ -41,12 +37,12 @@ struct Monitoring_args:Thread_args{
 * $Date: 2019/05/28 10:44:00 $
 */
 
-class Monitoring: public Tool {
+class ProcessData: public Tool {
 
 
  public:
 
-  Monitoring(); ///< Simple constructor
+  ProcessData(); ///< Simple constructor
   bool Initialise(std::string configfile,DataModel &data); ///< Initialise Function for setting up Tool resorces. @param configfile The path and name of the dynamic configuration file to read in. @param data A reference to the transient data class used to pass information between Tools.
   bool Execute(); ///< Executre function used to perform Tool perpose. 
   bool Finalise(); ///< Finalise funciton used to clean up resorces.
@@ -54,13 +50,12 @@ class Monitoring: public Tool {
 
  private:
 
-  bool LoadConfig();
+  void LoadConfig();
   static void Thread(Thread_args* arg); ///< Function to be run by the thread in a loop. Make sure not to block in it
-  std::string m_configfile;
   Utilities* m_util;  ///< Pointer to utilities class to help with threading
-  Monitoring_args* args; ///< thread args (also holds pointer to the thread)
+  ProcessData_args* args; ///< thread args (also holds pointer to the thread)
+  std::string m_configfile;
   
-
 };
 
 

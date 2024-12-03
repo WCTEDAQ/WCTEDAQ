@@ -1,13 +1,13 @@
-#include "FileWriter.h"
+#include "FileWriter2.h"
 
-FileWriter_args::FileWriter_args():Thread_args(){
+FileWriter2_args::FileWriter2_args():Thread_args(){
   data=0;
   file_name=0;
   part_number=0;
   file_writeout_period=0;
 }
 
-FileWriter_args::~FileWriter_args(){
+FileWriter2_args::~FileWriter2_args(){
   data=0;
   file_name=0;
   part_number=0;
@@ -15,10 +15,10 @@ FileWriter_args::~FileWriter_args(){
 }
 
 
-FileWriter::FileWriter():Tool(){}
+FileWriter2::FileWriter2():Tool(){}
 
 
-bool FileWriter::Initialise(std::string configfile, DataModel &data){
+bool FileWriter2::Initialise(std::string configfile, DataModel &data){
 
   InitialiseTool(data);
   m_configfile=configfile;
@@ -26,7 +26,7 @@ bool FileWriter::Initialise(std::string configfile, DataModel &data){
   //m_variables.Print();
 
   m_util=new Utilities();
-  args=new FileWriter_args();
+  args=new FileWriter2_args();
   
   LoadConfig();
   
@@ -43,7 +43,7 @@ bool FileWriter::Initialise(std::string configfile, DataModel &data){
 }
 
 
-bool FileWriter::Execute(){
+bool FileWriter2::Execute(){
 
   if(m_data->change_config){
     InitialiseConfiguration(m_configfile); // surely add load config here   need to do return checks.
@@ -59,7 +59,7 @@ bool FileWriter::Execute(){
 }
 
 
-bool FileWriter::Finalise(){
+bool FileWriter2::Finalise(){
 
   m_util->KillThread(args);
 
@@ -72,9 +72,9 @@ bool FileWriter::Finalise(){
   return true;
 }
 
-void FileWriter::Thread(Thread_args* arg){
+void FileWriter2::Thread(Thread_args* arg){
 
-  FileWriter_args* args=reinterpret_cast<FileWriter_args*>(arg);
+  FileWriter2_args* args=reinterpret_cast<FileWriter2_args*>(arg);
 
   args->lapse = args->period -( boost::posix_time::microsec_clock::universal_time() - args->last);
   if(!args->lapse.is_negative()){
@@ -88,23 +88,58 @@ void FileWriter::Thread(Thread_args* arg){
   
   args->last= boost::posix_time::microsec_clock::universal_time();
   
-  args->data->readout_windows_mtx.lock();
+  args->data->out_data_chunks_mtx.lock();
 
-  if(args->data->readout_windows->size()==0){
-    args->data->readout_windows_mtx.unlock();
+  if(args->data->out_data_chunks->size()==0){
+    args->data->out_data_chunks_mtx.unlock();
     return;
   }
 
   printf("writing out data\n");
-  std::deque<ReadoutWindow*>* readout_windows= args->data->readout_windows;
-  args->data->readout_windows= new std::deque<ReadoutWindow*>;
-  args->data->readout_windows_mtx.unlock();
-   
+  std::map<unsigned int, MPMTCollection*>* local_data_chunks = args->data->out_data_chunks;
+  args->data->out_data_chunks = new std::map<unsigned int, MPMTCollection*>;
+  //std::deque<ReadoutWindow*>* readout_windows= args->data->readout_windows;
+  // args->data->readout_windows= new std::deque<ReadoutWindow*>;
+
+  //std::swap(args->data->out_data_chunks, local_data_chunks);
+  args->data->out_data_chunks_mtx.unlock();
+  /*
+for(std::map<unsigned int, MPMTCollection*>::iterator it=local_data_chunks->begin(); it!=local_data_chunks->end(); it++){
+
+    for(unsigned int i=0; i<it->second->mpmt_output.size(); i++){
+      delete it->second->mpmt_output.at(i);
+      it->second->mpmt_output.at(i)=0;
+    }
+    for(unsigned int i=0; i<it->second->triggers_info.size(); i++){
+      delete it->second->triggers_info.at(i);
+      it->second->triggers_info.at(i)=0;
+    }
+    
+    delete it->second;
+    it->second=0;
+  
+
+ }
+  
+ local_data_chunks->clear();
+  */
   std::stringstream filename;
   filename<<(*args->file_name)<<"R"<<args->data->run_number<<"S"<<args->data->sub_run_number<<"P"<<(*args->part_number)<<".dat";
   BinaryStream output;
   output.Bopen(filename.str().c_str(), NEW, UNCOMPRESSED);
+
+
+  unsigned long size=local_data_chunks->size();
+   output<<size;
   
+  for(std::map<unsigned int, MPMTCollection*>::iterator it=local_data_chunks->begin(); it!=local_data_chunks->end(); it++){
+
+    unsigned int tmp= it->first;
+    MPMTCollection* tmp2= it->second;
+    output<<tmp;
+    output<<(*tmp2);
+
+  /*
   WCTERawData tmp;
   
   tmp.readout_windows.reserve(readout_windows->size());
@@ -120,14 +155,33 @@ void FileWriter::Thread(Thread_args* arg){
   
   delete readout_windows;
   readout_windows=0;
+  */
   
-    //printf("d2\n");
+  
+    for(unsigned int i=0; i<it->second->mpmt_output.size(); i++){
+      delete it->second->mpmt_output.at(i);
+      it->second->mpmt_output.at(i)=0;
+    }
+    for(unsigned int i=0; i<it->second->triggers_info.size(); i++){
+      delete it->second->triggers_info.at(i);
+      it->second->triggers_info.at(i)=0;
+    }
+    
+    delete it->second;
+    it->second=0;
+  }
+  
+  local_data_chunks->clear();
+  delete local_data_chunks;
+  local_data_chunks=0;
+
+  printf("d2\n");
   output.Bclose();
   (*args->part_number)++;
   
 }
 
-void FileWriter::LoadConfig(){ // change to bool have a return type
+void FileWriter2::LoadConfig(){ // change to bool have a return type
 
   
   if(!m_variables.Get("verbose",m_verbose)) m_verbose=1;

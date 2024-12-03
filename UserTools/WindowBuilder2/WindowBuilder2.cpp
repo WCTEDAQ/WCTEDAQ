@@ -38,7 +38,8 @@ bool WindowBuilder2::Execute(){
     ExportConfiguration();
   }
 
-  //  //printf("triggered_data::readout_windows = %d::%d\n", m_data->triggered_data.size(), m_data->readout_windows->size());
+
+  //printf("triggered_data::readout_windows = %d::%d\n", m_data->triggered_data.size(), m_data->readout_windows->size());
   // print somthing with it  args->readout_num;
   usleep(100);
   return true;
@@ -76,15 +77,21 @@ void WindowBuilder2::Thread(Thread_args* arg){
    delete it->second;
     }
   args->triggered_data.clear();
-  */  
+  */
+
+
+  
   unsigned int subset=0;
   for(std::map<unsigned int, MPMTData*>::iterator it=args->triggered_data.begin(); it!=args->triggered_data.end(); it++){
     //it->second->Print();
-    subset++;
+    /*  subset++;
     if(subset>args->triggered_data.size()/5){
       erase_list.push_back(it->first);
       continue;
     }
+  */    
+
+  
     //it->second->Print();
     //    printf("d3 %d:%d\n",it->first,(args->data->current_coarse_counter >>22) - 500);
     bool orphaned=it->first < (args->data->current_coarse_counter >>22) - 500;     
@@ -131,7 +138,7 @@ void WindowBuilder2::Thread(Thread_args* arg){
       //////////////////////////////////////////////////////////////////////////////
        //printf("d9\n");
       ////////////////////////////// adding nhits and straglers (shouldnt be any other than nhits)
-    
+      /*    
       if(args->offset_trigger.count(TriggerType::NHITS)){
 	for(unsigned int i=0; i<it->second->unmerged_triggers.size(); i++){
 	  if(trigger_veto.count(i)) continue;
@@ -157,7 +164,7 @@ void WindowBuilder2::Thread(Thread_args* arg){
 	  merged_triggers.push_back(tmp);
 	}
       }
-      
+      */
  ////////////////////////////////////////////////////////////////////////
   //printf("d10.9\n");
       
@@ -236,24 +243,41 @@ if( it->second->unmerged_triggers.at(merged_triggers.at(i).at(j)).time + args->o
       
 	  std::vector<WCTEMPMTHit>::iterator start_hit;
 	  std::vector<WCTEMPMTHit>::iterator stop_hit;
+	  unsigned long start_time=0;
+	  unsigned long end_time=0;
+	  
 	  bool fill=false;
 	  
 	  if(args->triggered_data[bin]->mpmt_hits.size()>0){
 	    start_hit=args->triggered_data[bin]->mpmt_hits.end();
 	    start_hit--;
 	    stop_hit=args->triggered_data[bin]->mpmt_hits.begin();
+	    start_time=  ((unsigned long)(args->triggered_data[bin]->coarse_counter & 4294901760U) <<16) | (unsigned long) start_hit->GetCoarseCounter();
+	    // if((args->triggered_data[bin]->coarse_counter & 65535U) > start_hit->GetCoarseCounter() >> 16) start_time +=4294967296U;
+	    
+	    end_time=  ((unsigned long)(args->triggered_data[bin]->coarse_counter & 4294901760U) <<16) | (unsigned long) stop_hit->GetCoarseCounter();
+	    // if((args->triggered_data[bin]->coarse_counter & 65535U) > stop_hit->GetCoarseCounter() >> 16) end_time +=4294967296U;
 
-
+	    unsigned long hit_time=0;
 	    for(std::vector<WCTEMPMTHit>::iterator it_hit=args->triggered_data[bin]->mpmt_hits.begin(); it_hit!=args->triggered_data[bin]->mpmt_hits.end(); it_hit++){
 	      //printf("hit time min|time|max = %u|%u|%u\n", min_time, it_hit->GetCoarseCounter(), max_time);
-	      if(it_hit->GetCoarseCounter() > max_time) break;
+	      hit_time = ((unsigned long)(args->triggered_data[bin]->coarse_counter & 4294901760U) <<16) | (unsigned long) it_hit->GetCoarseCounter();
+	      // if((args->triggered_data[bin]->coarse_counter & 65535U) > it_hit->GetCoarseCounter() >> 16) hit_time +=4294967296U;
+	      
+	      if(hit_time > max_time) break;
 	      //printf("d13.1\n");
-	      if(it_hit->GetCoarseCounter() >= min_time){
+	      if(hit_time >= min_time){
 		fill=true;
 		//printf("d13.2\n");
-		if(it_hit->GetCoarseCounter() < start_hit->GetCoarseCounter()) start_hit= it_hit;
+		if(hit_time < start_time){
+		  start_hit= it_hit;
+		  start_time=hit_time;
+		}
 		//printf("d13.3\n");
-		if(it_hit->GetCoarseCounter() > stop_hit->GetCoarseCounter()) stop_hit= it_hit;
+		if(hit_time > end_time){
+		  stop_hit= it_hit;
+		  end_time = hit_time;
+		}
 		//printf("d13.4\n");
 	      }
 	      //printf("d13.4b\n");
@@ -281,14 +305,28 @@ if( it->second->unmerged_triggers.at(merged_triggers.at(i).at(j)).time + args->o
 	    start_waveform=args->triggered_data[bin]->mpmt_waveforms.end();
 	    start_waveform--;
 	    stop_waveform=args->triggered_data[bin]->mpmt_waveforms.begin(); 
+	    start_time = ((unsigned long)(args->triggered_data[bin]->coarse_counter & 4294901760U) <<16) | (unsigned long) start_waveform->header.GetCoarseCounter();
+	    end_time = ((unsigned long)(args->triggered_data[bin]->coarse_counter & 4294901760U) <<16) | (unsigned long) stop_waveform->header.GetCoarseCounter();
+	
+
 	    fill=false;
+
+	    unsigned long waveform_time=0;
 	    
 	    for(std::vector<WCTEMPMTWaveform>::iterator it_waveform=args->triggered_data[bin]->mpmt_waveforms.begin(); it_waveform!=args->triggered_data[bin]->mpmt_waveforms.end(); it_waveform++){
-	      if(it_waveform->header.GetCoarseCounter() > max_time) break;
-	      if(it_waveform->header.GetCoarseCounter() >= min_time){
+	      waveform_time = ((unsigned long)(args->triggered_data[bin]->coarse_counter & 4294901760U) <<16) | (unsigned long) it_waveform->header.GetCoarseCounter();
+
+	      if(waveform_time > max_time) break;
+	      if(waveform_time >= min_time){
 		fill=true;
-		if(it_waveform->header.GetCoarseCounter() < start_waveform->header.GetCoarseCounter()) start_waveform= it_waveform;
-		if(it_waveform->header.GetCoarseCounter() > stop_waveform->header.GetCoarseCounter()) stop_waveform= it_waveform;
+		if(waveform_time < start_time){
+		  start_waveform= it_waveform;
+		  start_time=waveform_time;
+		}
+		if(waveform_time > end_time){
+		  stop_waveform= it_waveform;
+		  end_time=waveform_time;
+		}
 		
 	      }
 	    }
@@ -309,17 +347,30 @@ if( it->second->unmerged_triggers.at(merged_triggers.at(i).at(j)).time + args->o
 	    start_hit=args->triggered_data[bin]->extra_hits.end();
 	    start_hit--;
 	    stop_hit=args->triggered_data[bin]->extra_hits.begin();
+	    start_time=  ((unsigned long)(args->triggered_data[bin]->coarse_counter & 4294901760U) <<16) | (unsigned long) start_hit->GetCoarseCounter();
+            end_time=  ((unsigned long)(args->triggered_data[bin]->coarse_counter & 4294901760U) <<16) | (unsigned long) stop_hit->GetCoarseCounter();
+	    
+            unsigned long hit_time=0;
 	    fill=false;
 	    
 	    for(std::vector<WCTEMPMTHit>::iterator it_hit=args->triggered_data[bin]->extra_hits.begin(); it_hit!=args->triggered_data[bin]->extra_hits.end(); it_hit++){
-	      if(it_hit->GetCoarseCounter() > max_time) break;
-	      if(it_hit->GetCoarseCounter() >= min_time){
+	      hit_time = ((unsigned long)(args->triggered_data[bin]->coarse_counter & 4294901760U) <<16) | (unsigned long) it_hit->GetCoarseCounter();
+	      
+	      if(hit_time > max_time) break;
+	      if(hit_time >= min_time){
 		fill=true;
-		if(it_hit->GetCoarseCounter() < start_hit->GetCoarseCounter()) start_hit= it_hit;
-		if(it_hit->GetCoarseCounter() > stop_hit->GetCoarseCounter()) stop_hit= it_hit;
+		if(hit_time < start_time){
+		  start_hit= it_hit;
+		  start_time=hit_time;
+		}
+		if(hit_time > end_time){
+		  stop_hit= it_hit;
+		  end_time = hit_time;
+		}
 	      }
-	    }
-	    
+	      
+	    } 
+
 	    //	tmp_readout->mpmt_hits.resize(size);
 	    //std::memcpy(tmp_readout->mpmt_hits.data(), it->second->mpmt_hits.data(), sizeof(it->second->mpmt_hits.data()));
 	    stop_hit++;
@@ -335,27 +386,43 @@ if( it->second->unmerged_triggers.at(merged_triggers.at(i).at(j)).time + args->o
 	     start_waveform=args->triggered_data[bin]->extra_waveforms.end();
 	     start_waveform--;
 	     stop_waveform=args->triggered_data[bin]->extra_waveforms.begin();
+	     start_time = ((unsigned long)(args->triggered_data[bin]->coarse_counter & 4294901760U) <<16) | (unsigned long) start_waveform->header.GetCoarseCounter();
+	     end_time = ((unsigned long)(args->triggered_data[bin]->coarse_counter & 4294901760U) <<16) | (unsigned long) stop_waveform->header.GetCoarseCounter();
+	     
 	     fill=false;
 	     
-	  for(std::vector<WCTEMPMTWaveform>::iterator it_waveform=args->triggered_data[bin]->extra_waveforms.begin(); it_waveform!=args->triggered_data[bin]->extra_waveforms.end(); it_waveform++){
-	    if(it_waveform->header.GetCoarseCounter() > max_time) break;
-	    if(it_waveform->header.GetCoarseCounter() >= min_time){
-	      fill=true;
-	      if(it_waveform->header.GetCoarseCounter() < start_waveform->header.GetCoarseCounter()) start_waveform= it_waveform;
-	      if(it_waveform->header.GetCoarseCounter() > stop_waveform->header.GetCoarseCounter()) stop_waveform= it_waveform;
-	      
-	    }
-	  }
-	  
-	  //tmp_readout->mpmt_waveforms.resize(size);
-	  //std::memcpy(tmp_readout->mpmt_waveforms.data(), it->second->mpmt_waveforms.data(), sizeof(it->second->mpmt_waveforms.data()));
-	  stop_waveform++;
-	  if(fill) tmp_readout->extra_waveforms.insert(tmp_readout->extra_waveforms.end(), start_waveform, stop_waveform);
+	     unsigned long waveform_time=0;
+	     
+	     
+	     for(std::vector<WCTEMPMTWaveform>::iterator it_waveform=args->triggered_data[bin]->extra_waveforms.begin(); it_waveform!=args->triggered_data[bin]->extra_waveforms.end(); it_waveform++){
+	       waveform_time = ((unsigned long)(args->triggered_data[bin]->coarse_counter & 4294901760U) <<16) | (unsigned long) it_waveform->header.GetCoarseCounter();
+
+	       if(waveform_time > max_time) break;
+	       if(waveform_time >= min_time){
+		 fill=true;
+		 if(waveform_time < start_time){
+		   start_waveform= it_waveform;
+		   start_time=waveform_time;
+		 }
+		 if(waveform_time > end_time){
+		   stop_waveform= it_waveform;
+		   end_time=waveform_time;
+		 }
+		 
+	       }
+	       
+	       
+	     }
+	     
+	     //tmp_readout->mpmt_waveforms.resize(size);
+	     //std::memcpy(tmp_readout->mpmt_waveforms.data(), it->second->mpmt_waveforms.data(), sizeof(it->second->mpmt_waveforms.data()));
+	     stop_waveform++;
+	     if(fill) tmp_readout->extra_waveforms.insert(tmp_readout->extra_waveforms.end(), start_waveform, stop_waveform);
 	   }
 	   /////////////////////////////////////////////////////////////////////////////
 	   
 	}
-      
+	
 	//printf("d17\n");
 	
 	//////////////////////  collecting qdc and tdc hits  /////////////////////////	  
@@ -372,15 +439,15 @@ if( it->second->unmerged_triggers.at(merged_triggers.at(i).at(j)).time + args->o
 	
 	
 	//////////////////////////////////////////////////////////////////////////
-	 //printf("d18\n");
+	//printf("d18\n");
 	//adding readout window
-	 //printf("d18.1 pointer =%p\n", tmp_readout);
+	//printf("d18.1 pointer =%p\n", tmp_readout);
 	args->data->readout_windows_mtx.lock();
-	 //printf("d18.2\n");
-	 //printf("d18.3 size=%d\n", args->data->readout_windows->size());
+	//printf("d18.2\n");
+	//printf("d18.3 size=%d\n", args->data->readout_windows->size());
 	//tmp_readout->Print();
 	args->data->readout_windows->push_back(tmp_readout);
-	 //printf("d18.4\n");
+	//printf("d18.4\n");
 	args->data->readout_windows_mtx.unlock();
 	//delete tmp_readout;
 	//printf("d19\n");
@@ -389,27 +456,27 @@ if( it->second->unmerged_triggers.at(merged_triggers.at(i).at(j)).time + args->o
       if(orphaned) erase_list.push_back(it->first);
       else if(it->first !=0) erase_list.push_back(it->first - 1); ///BEN!!!! THIS NEEDS CHECKING
       //printf("d20\n");
-  }
+    }
     
   }
   
   //printf("d21\n");
   /// deleting data;
-
+  
   for (std::vector<unsigned int>::iterator it=erase_list.begin(); it!=erase_list.end(); it++){
     //printf("d22\n");
     delete args->triggered_data[*it];
     args->triggered_data[*it]=0;
-
+    
     args->triggered_data.erase(*it);
-
+    
   }
   //printf("d23\n");
   erase_list.clear();
   //printf("d24\n");
-
   
-
+  
+  
 }
 
 void WindowBuilder2::LoadConfig(){

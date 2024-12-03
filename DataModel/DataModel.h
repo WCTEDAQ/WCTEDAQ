@@ -29,6 +29,8 @@
 #include "TDCHit.h"
 #include "QDCHit.h"
 
+#include <MPMTMessages.h>
+
 using namespace ToolFramework;
 
 
@@ -104,6 +106,14 @@ public:
   unsigned long spill_num;
   unsigned long vme_event_num;
   unsigned long readout_num;
+
+  std::map<unsigned int, MPMTCollection*> data_chunks;
+  std::mutex data_chunks_mtx;
+
+  std::map<unsigned int, MPMTCollection*>* out_data_chunks;
+  std::mutex out_data_chunks_mtx;
+
+
   
 private:
   

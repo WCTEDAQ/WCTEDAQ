@@ -83,6 +83,7 @@ bool RunControl::Execute(){
 
     m_data->readout_windows_mtx.lock();
     if(m_data->readout_windows->size()==0){
+      m_data->vars.Set("Runinfo", "Run Stopped");
       m_data->vars.Set("Status", "Run Stopped");
       m_stopping=false;
     }
@@ -140,6 +141,7 @@ bool RunControl::Execute(){
               
               std::stringstream tmp;
               tmp<<"R"<<m_data->run_number<<"S"<<m_data->sub_run_number;
+	      m_data->vars.Set("Runinfo",tmp.str());
               m_data->vars.Set("Status", tmp.str());
               
               //m_data->services->SendLog("Run "+std::to_string(m_data->run_number)+" started", 0);
@@ -155,6 +157,7 @@ bool RunControl::Execute(){
   }
   
   if(m_run_stop){
+    m_data->vars.Set("Runinfo","Run Stopped");
     m_data->vars.Set("Status", "Run Stopped");
     m_data->run_stop=true;
     m_run_stop=false;
@@ -162,6 +165,7 @@ bool RunControl::Execute(){
   if(m_new_sub_run){
     std::stringstream tmp;
     tmp<<"R"<<m_data->run_number<<"S"<<m_data->sub_run_number;
+    m_data->vars.Set("RunInfo", tmp.str());
     m_data->vars.Set("Status", tmp.str());
 
     m_data->sub_run=true;
@@ -242,6 +246,7 @@ std::string RunControl::RunStart(const char* key){
   }
   
   m_run_start=true;
+  m_data->vars.Set("Runinfo","Starting new run");
   m_data->vars.Set("Status", "Starting new run");
   m_data->load_config=true;
   

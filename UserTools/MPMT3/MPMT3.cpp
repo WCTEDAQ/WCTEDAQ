@@ -1,21 +1,24 @@
-#include "MPMT2.h"
+#include "MPMT3.h"
 
-MPMT2Messages::MPMT2Messages(){
-  daq_header=0;
-  mpmt_data=0;
+MPMT3Messages::MPMT3Messages(){
+  //  daq_header=0;
+  //mpmt_data=0;
+  mpmt_message=0;
   m_data=0;
+  time_corrections=0;
 }
 
-MPMT2Messages::~MPMT2Messages(){
-  delete daq_header;
-  daq_header=0;
-  delete mpmt_data;
-  mpmt_data=0;
+MPMT3Messages::~MPMT3Messages(){
+  // delete daq_header;
+  //daq_header=0;
+  //delete mpmt_data;
+  // mpmt_data=0;
+  mpmt_message=0;
   m_data=0;
-  
+  time_corrections=0; 
 }
 
-MPMT2_args::MPMT2_args():Thread_args(){
+MPMT3_args::MPMT3_args():Thread_args(){
   data_sock=0;
   utils=0;
   job_queue=0;
@@ -23,7 +26,7 @@ MPMT2_args::MPMT2_args():Thread_args(){
 
 }
 
-MPMT2_args::~MPMT2_args(){
+MPMT3_args::~MPMT3_args(){
   delete data_sock;
   data_sock=0;
   delete utils;
@@ -41,10 +44,10 @@ MPMT2_args::~MPMT2_args(){
 }
 
 
-MPMT2::MPMT2():Tool(){}
+MPMT3::MPMT3():Tool(){}
 
 
-bool MPMT2::Initialise(std::string configfile, DataModel &data){
+bool MPMT3::Initialise(std::string configfile, DataModel &data){
 
   InitialiseTool(data);
   InitialiseConfiguration(configfile);
@@ -68,11 +71,11 @@ bool MPMT2::Initialise(std::string configfile, DataModel &data){
   
   
   
-  return true;
+ return true;
 }
 
 
-bool MPMT2::Execute(){
+bool MPMT3::Execute(){
 
   for(std::map<std::string, unsigned int>::iterator it=m_data->hit_map.begin(); it!=m_data->hit_map.end(); it++){
     m_data->monitoring_store_mtx.lock();
@@ -117,7 +120,7 @@ bool MPMT2::Execute(){
 }
 
 
-bool MPMT2::Finalise(){
+bool MPMT3::Finalise(){
 
   for(unsigned int i=0;i<args.size();i++) DeleteThread(0);
   
@@ -129,9 +132,9 @@ bool MPMT2::Finalise(){
   return true;
 }
 
-void MPMT2::CreateThread(){
+void MPMT3::CreateThread(){
 
-  MPMT2_args* tmparg=new MPMT2_args();
+  MPMT3_args* tmparg=new MPMT3_args();
  
   tmparg->data_sock=new zmq::socket_t(*(m_data->context), ZMQ_ROUTER);
   tmparg->data_port=m_mpmt_port;
@@ -147,6 +150,7 @@ void MPMT2::CreateThread(){
   tmparg->last=boost::posix_time::microsec_clock::universal_time();
   tmparg->m_data=m_data;
   tmparg->job_queue=&(m_data->job_queue);
+  tmparg->hit_rates=&m_data->hit_map;
 
   std::string config_json="";
   m_data->services->GetDeviceConfig(config_json, -1, "MCCAssignments");
@@ -154,7 +158,7 @@ void MPMT2::CreateThread(){
   times.JsonParser(config_json);
   
   int correction =0;
-  for(int i=0; i<200; i++){
+  for(unsigned int i=0; i<200; i++){
     if(times.Get(std::to_string(i),correction)){
       tmparg->time_corrections[i]=correction;
     }
@@ -171,7 +175,7 @@ void MPMT2::CreateThread(){
 
 }
 
- void MPMT2::DeleteThread(unsigned int pos){
+ void MPMT3::DeleteThread(unsigned int pos){
 
    m_util->KillThread(args.at(pos));
 
@@ -188,9 +192,9 @@ void MPMT2::CreateThread(){
 
  }
 
-void MPMT2::Thread(Thread_args* arg){
+void MPMT3::Thread(Thread_args* arg){
 
-  MPMT2_args* args=reinterpret_cast<MPMT2_args*>(arg);
+  MPMT3_args* args=reinterpret_cast<MPMT3_args*>(arg);
 
   args->lapse = args->period -( boost::posix_time::microsec_clock::universal_time() - args->last);
   
@@ -198,6 +202,7 @@ void MPMT2::Thread(Thread_args* arg){
     //printf("in lapse \n");
     unsigned short num_connections = args->connections.size();
     if(args->utils->UpdateConnections("TPMT", args->data_sock, args->connections, args->data_port) > num_connections) args->m_data->services->SendLog("Info: New MPMT connected",v_message); //add pmt id
+    if(args->utils->UpdateConnections("MPMT", args->data_sock, args->connections, args->data_port) > num_connections) args->m_data->services->SendLog("Info: New MPMT connected",v_message); //add pmt id
     args->m_data->monitoring_store_mtx.lock();
     args->m_data->monitoring_store.Set("connected_MPMTs",num_connections);
     args->m_data->monitoring_store_mtx.unlock();
@@ -211,8 +216,9 @@ void MPMT2::Thread(Thread_args* arg){
     //printf("received data\n");
     
     zmq::message_t identity;
-    zmq::message_t* daq_header = new zmq::message_t;
-    zmq::message_t* mpmt_data = new zmq::message_t;
+
+    //zmq::message_t* daq_header = new zmq::message_t;
+    //zmq::message_t* mpmt_data = new zmq::message_t;
 
     args->message_received=false;
     args->no_data=false;
@@ -221,37 +227,39 @@ void MPMT2::Thread(Thread_args* arg){
 
     if(!identity.more() || !args->message_received || identity.size() == 0){
       args->m_data->services->SendLog("Warning: MPMT thread identity has no size or only message",3);
-      delete mpmt_data;
-      mpmt_data=0;
-      delete daq_header;
-      daq_header=0;
+      //   delete mpmt_data;
+      //mpmt_data=0;
+      //delete daq_header;
+      //daq_header=0;
       return;
     }
+
+    MPMTMessage* mpmt_message = new MPMTMessage;
     
-    args->message_received=args->data_sock->recv(daq_header);
+    args->message_received=args->data_sock->recv(&mpmt_message->daq_header);
     
-    if(!args->message_received || daq_header->size()!=DAQHeader::GetSize() ){
+    if(!args->message_received || mpmt_message->daq_header.size()!=DAQHeader::GetSize() ){
       args->m_data->services->SendLog("Warning: MPMT thread daq header has no or incorrect size",3);
-      delete mpmt_data;
-      mpmt_data=0;
-      delete daq_header;
-      daq_header=0;
+      delete mpmt_message;
+      mpmt_message=0;
+      // delete daq_header;
+      // daq_header=0;
       return;
     }
-    if(!daq_header->more()) args->no_data=true;
+    if(!mpmt_message->daq_header.more()) args->no_data=true;
     else{
-      args->message_received=args->data_sock->recv(mpmt_data);
-      if(mpmt_data->more() || !args->message_received || mpmt_data->size() == 0){
+      args->message_received=args->data_sock->recv(&mpmt_message->mpmt_data);
+      if(mpmt_message->mpmt_data.more() || !args->message_received || mpmt_message->mpmt_data.size() == 0){
 	args->m_data->services->SendLog("ERROR: MPMT thread too many message parts or no data, throwing away data",2); //add mpmtid
 	zmq::message_t throwaway;
-	if(mpmt_data->more()){
+	if(mpmt_message->mpmt_data.more()){
 	  args->data_sock->recv(&throwaway);
 	  while(throwaway.more()) args->data_sock->recv(&throwaway);
 	}
-	delete mpmt_data;
-	mpmt_data=0;
-	delete daq_header;
-	daq_header=0;
+	delete mpmt_message;
+	mpmt_message=0;
+	//delete daq_header;
+	//daq_header=0;
 	return;
       }
     }
@@ -259,32 +267,36 @@ void MPMT2::Thread(Thread_args* arg){
 	
     zmq::message_t reply(4);
     //printf("d1\n");
-    memcpy(reply.data(), daq_header->data(), reply.size());
+    memcpy(reply.data(), mpmt_message->daq_header.data(), reply.size());
     //printf("sending reply\n");
     args->data_sock->send(identity, ZMQ_SNDMORE); /// need to add checking probablly a poll incase sender dies
     args->data_sock->send(reply);
     //printf("sent reply\n");
     
     if(args->no_data){
-      delete mpmt_data;
-      mpmt_data=0;
-      delete daq_header;
-      daq_header=0;
+      delete mpmt_message;
+      mpmt_message=0;
+      //      delete daq_header;
+      //daq_header=0;
     }
     else{
       //printf("creating job\n");
       Job* tmp_job= new Job("MPMT");
-      MPMT2Messages* tmp_msgs= new MPMT2Messages;
+      MPMT3Messages* tmp_msgs= new MPMT3Messages;
       tmp_msgs->time_corrections=&(args->time_corrections[0]);
-      tmp_msgs->daq_header=daq_header;
-      tmp_msgs->mpmt_data=mpmt_data;
+      // tmp_msgs->daq_header=daq_header;
+      //  tmp_msgs->mpmt_data=mpmt_data;
+      tmp_msgs->mpmt_message=mpmt_message;
       tmp_msgs->m_data=args->m_data;
       tmp_job->data= tmp_msgs;
+      tmp_msgs->hit_rates=args->hit_rates;
       //printf("d1\n");
       tmp_job->func=ProcessData;
       //printf("d2\n");
-      //      delete tmp_msgs;
-      // delete tmp_job;
+      //delete tmp_msgs;
+      //delete mpmt_message;
+      //delete tmp_job;
+      //printf("d3\n");
       args->job_queue->AddJob(tmp_job);
       //sleep(5);
       //printf("job submitted %d\n",args->job_queue->size());
@@ -295,16 +307,30 @@ void MPMT2::Thread(Thread_args* arg){
 
 
 
-bool MPMT2::ProcessData(void* data){
+bool MPMT3::ProcessData(void* data){
 
   //printf("in process data\n");
-  MPMT2Messages* msgs=reinterpret_cast<MPMT2Messages*>(data);
+  MPMT3Messages* msgs=reinterpret_cast<MPMT3Messages*>(data);
   //printf("d1\n");  
-  DAQHeader* daq_header=reinterpret_cast<DAQHeader*>(msgs->daq_header->data());
-  unsigned int bin= daq_header->GetCoarseCounter() >> 6; //might not be worth rounding
+  DAQHeader* daq_header=reinterpret_cast<DAQHeader*>(msgs->mpmt_message->daq_header.data());
+
+  unsigned int bin= daq_header->GetCoarseCounter();  
+
   unsigned short card_id = daq_header->GetCardID();
   unsigned short card_type = daq_header->GetCardType();
-  unsigned long bytes=msgs->mpmt_data->size();
+
+  //printf("%u:%u\n", daq_header->GetCardID(), daq_header->GetCoarseCounter());
+  
+  std::vector<MPMTHit*> triggers;
+  std::vector<MPMTLED*> leds;
+  std::vector<TriggerInfo*> triggers_info;
+  
+  //    if(card_type==3U){
+  // card_type=3U;
+    //find triggers
+
+  
+  unsigned long bytes=msgs->mpmt_message->mpmt_data.size();
   unsigned long current_byte=0;
     //printf("%u:%u\n", daq_header->GetCardID(), daq_header->GetCoarseCounter());
     /*if((msgs->m_data->current_coarse_counter >>22) >2000){  
@@ -325,7 +351,7 @@ bool MPMT2::ProcessData(void* data){
     */
   //printf("d2 car_id=%d\n", card_id);
   //  daq_header->Print();
-  std::map<unsigned int, MPMTData*> local_data;
+  //  std::map<unsigned int, MPMTData*> local_data;
   /*  std::vector<WCTEMPMTHit> vec_mpmt_hit;
   std::vector<WCTEMPMTLED> vec_mpmt_led;
   std::vector<WCTEMPMTPPS> vec_mpmt_pps;
@@ -333,10 +359,12 @@ bool MPMT2::ProcessData(void* data){
   std::vector<WCTEMPMTHit> vec_triggers_hit;
   */
  //printf("d3\n");
-  unsigned char* mpmt_data= reinterpret_cast<unsigned char*>(msgs->mpmt_data->data());
+  std::string pmt_unique_name="";
+  unsigned char* mpmt_data= reinterpret_cast<unsigned char*>(msgs->mpmt_message->mpmt_data.data());
   ////printf("data size %d\n",msgs->mpmt_data->size());
    //printf("d4\n");
   while(current_byte<bytes && (bytes-current_byte)>8){
+    
     //printf("d5 curent:total= %d:%d\n", current_byte, bytes);
     //printf("cuurent byte %d : %d\n",mpmt_data[current_byte], (mpmt_data[current_byte] >> 6));
     //printf("(mpmt_data[current_byte] >> 6) == 0b1:%d\n", ((mpmt_data[current_byte] >> 6) == 0b1));
@@ -346,13 +374,52 @@ bool MPMT2::ProcessData(void* data){
       //printf("in hit, led or pps \n");
       if(((mpmt_data[current_byte] >> 2) & 0b00001111 ) == 0U && bytes-current_byte >= WCTEMPMTHit::GetSize()){ // its normal mpmt hit
 	//printf("in hit\n");
-	WCTEMPMTHit tmp(card_id, &mpmt_data[current_byte]);
-	tmp.SetCoarseCounter(tmp.GetCoarseCounter() + 12*msgs->time_corrections[card_id]);
+	MPMTHit* tmp= reinterpret_cast<MPMTHit*>(&mpmt_data[current_byte]);
+	//	  tmp(card_id, &mpmt_data[current_byte]);
+	//tmp.SetCoarseCounter(tmp.GetCoarseCounter() + 12*msgs->time_corrections[card_id]);
 	//	UWCTEMPMTHit* bob = reinterpret_cast<UWCTEMPMTHit*>(&tmp);
+	if(tmp->GetChannel()<10 && card_type==3U){
+	  //triggers.push_back(tmp);
+	  TriggerInfo* trigger_info = new TriggerInfo;
+	  switch(tmp->GetChannel()){
+	    
+	  case 0U: //main trigger
+	     trigger_info->type = TriggerType::MAIN;
+	    break;
+	    
+	  case 1U: //beam monitor - electron
+	     trigger_info->type = TriggerType::EBEAM;
+	    break;
+	    
+	  case 2U: //beam monitor - muon
+	     trigger_info->type = TriggerType::MBEAM;
+	    break;
+	    
+	  case 5U: //CDS laser
+	     trigger_info->type = TriggerType::LASER;
+	    break;
+	    
+	  case 7U:
+	     trigger_info->type = TriggerType::HARD6;
+	    break;
 
+	  default:
+	     trigger_info->type = TriggerType::NONE;
+	    break;
+	  }
+
+	  trigger_info->time= ((daq_header->GetCoarseCounter() & 4294901760U )<<16)  | (tmp->GetCoarseCounter());
+	  if((daq_header->GetCoarseCounter() & 65535U) > (tmp->GetCoarseCounter() >>16)) trigger_info->time+=65536U;
+	  trigger_info->card_id=card_id;
+	  triggers_info.push_back(trigger_info);
+	}
 	
 	current_byte+=WCTEMPMTHit::GetSize();
-	unsigned int tmp_bin = (daq_header->GetCoarseCounter() & 4294901760U ) | (tmp.GetCoarseCounter() >>16);
+	pmt_unique_name=std::to_string(card_id)+":"+std::to_string(tmp->GetChannel());
+	if(!msgs->hit_rates->count(pmt_unique_name)) (*msgs->hit_rates)[pmt_unique_name]=0;
+	(*msgs->hit_rates)[pmt_unique_name]++;
+	
+	/*	unsigned int tmp_bin = (daq_header->GetCoarseCounter() & 4294901760U ) | (tmp.GetCoarseCounter() >>16);
 	if((daq_header->GetCoarseCounter() & 65535U) > (tmp.GetCoarseCounter() >>16)){
 	   //printf("this should not print alot\n");
 	   tmp_bin +=65536U;
@@ -378,28 +445,41 @@ bool MPMT2::ProcessData(void* data){
 	  local_data[tmp_bin]->mpmt_hits.push_back(tmp);
 	  //printf("its a normal hit\n");
 	}
+	*/
       }
-      
+	
       //else if(((mpmt_data[current_byte] >> 2) & 0b00001111 ) == 1U ){
 	//printf("in ped \n");
       //      }// its a pedistal (dont know) 
       
       else if(((mpmt_data[current_byte] >> 2) & 0b00001111 ) == 2U && bytes-current_byte >= WCTEMPMTLED::GetSize()){// its LED
-	//printf("in led \n");
-	WCTEMPMTLED tmp(card_id, &mpmt_data[current_byte]);
-	tmp.SetCoarseCounter(tmp.GetCoarseCounter() + 12*msgs->time_corrections[card_id]);
+	printf("in led \n");
+	//	WCTEMPMTLED tmp(card_id, &mpmt_data[current_byte]);
+	//tmp.SetCoarseCounter(tmp.GetCoarseCounter() + 12*msgs->time_corrections[card_id]);
+
+	MPMTLED* tmp = reinterpret_cast<MPMTLED*>(&mpmt_data[current_byte]);
+
+	leds.push_back(tmp);
+
+	TriggerInfo* trigger_info = new TriggerInfo;
+	trigger_info->type= TriggerType::LED;
+	trigger_info->time= ((daq_header->GetCoarseCounter() & 4294901760U )<<16)  | (tmp->GetCoarseCounter());
+	if((daq_header->GetCoarseCounter() & 65535U) > (tmp->GetCoarseCounter() >>16)) trigger_info->time+=65536U;
+	trigger_info->card_id=card_id;
+	triggers_info.push_back(trigger_info);
+	
 	current_byte+=WCTEMPMTLED::GetSize();
-	unsigned int tmp_bin = (daq_header->GetCoarseCounter() & 4294901760U ) | (tmp.GetCoarseCounter() >>16);
-        if((daq_header->GetCoarseCounter() & 65535U) > (tmp.GetCoarseCounter() >>16)){
+	//unsigned int tmp_bin = (daq_header->GetCoarseCounter() & 4294901760U ) | (tmp.GetCoarseCounter() >>16);
+        //if((daq_header->GetCoarseCounter() & 65535U) > (tmp.GetCoarseCounter() >>16)){
 	  //printf("this should not print alot\n");
-	  tmp_bin +=65536U;
-	}
-	tmp_bin = tmp_bin >> 6;
-	if(!local_data.count(tmp_bin)){
-	  local_data[tmp_bin] = new MPMTData();
-	  local_data[tmp_bin]->coarse_counter=tmp_bin<<6;
-	}
-	  local_data[tmp_bin]->mpmt_leds.push_back(tmp);
+	  //tmp_bin +=65536U;
+	//}
+	//tmp_bin = tmp_bin >> 6;
+	//if(!local_data.count(tmp_bin)){
+	// local_data[tmp_bin] = new MPMTData();
+	// local_data[tmp_bin]->coarse_counter=tmp_bin<<6;
+	//}
+	// local_data[tmp_bin]->mpmt_leds.push_back(tmp);
       }
       
       //      else if(((mpmt_data[current_byte] >> 2) & 0b00001111 ) == 3U){
@@ -420,16 +500,22 @@ bool MPMT2::ProcessData(void* data){
       else{
 	 //printf("none of hit LED or pps despite saying it is\n");
 	std::string tmp="ERROR: Data from MPMT" +  std::to_string(card_id)  +" is courupt or of uknown structure";
-	 for(std::map<unsigned int, MPMTData*>::iterator it=local_data.begin(); it!=local_data.end(); it++){
-	   delete it->second;
-	   it->second=0;
-	 }
-	 local_data.clear();
+	//	for(std::map<unsigned int, MPMTData*>::iterator it=local_data.begin(); it!=local_data.end(); it++){
+	//	  delete it->second;
+	//it->second=0;
+	//}
+	//local_data.clear();
 	 msgs->m_data->services->SendLog(tmp,0);
-	 delete msgs->daq_header;
-	 msgs->daq_header=0;
-	 delete msgs->mpmt_data;
-	 msgs->mpmt_data=0;
+	 // delete msgs->daq_header;
+	 //msgs->daq_header=0;
+	 //delete msgs->mpmt_data;
+	 //msgs->mpmt_data=0;
+	 delete msgs->mpmt_message;
+	 msgs->mpmt_message=0;
+	 for(unsigned int i=0; i<triggers_info.size(); i++){
+	   delete triggers_info.at(i);
+	   triggers_info.at(i)=0;
+	 }
 	 delete msgs;
 	 msgs=0;
 	return false;
@@ -439,11 +525,12 @@ bool MPMT2::ProcessData(void* data){
     else if ((mpmt_data[current_byte] >> 6) == 2U && bytes-current_byte >= WCTEMPMTWaveformHeader::GetSize()){ //its a waveform
       //printf("in Waveform\n");
        //printf("k0\n");
-      WCTEMPMTWaveform tmp(card_id, &mpmt_data[current_byte]);
-       tmp.header.SetCoarseCounter(tmp.header.GetCoarseCounter() + 12*msgs->time_corrections[card_id]);
+      //WCTEMPMTWaveform tmp(card_id, &mpmt_data[current_byte]);
+      //tmp.header.SetCoarseCounter(tmp.header.GetCoarseCounter() + 12*msgs->time_corrections[card_id]);
       // printf("k1 channel=%u\n", tmp.header.GetChannel());
-       current_byte+=  WCTEMPMTWaveformHeader::GetSize() + tmp.header.GetLength();
-       //printf("k2\n");
+      MPMTWaveformHeader* tmp = reinterpret_cast<MPMTWaveformHeader*>(&mpmt_data[current_byte]);
+      current_byte+=  WCTEMPMTWaveformHeader::GetSize() + tmp->GetLength();
+      //printf("k2\n");
        /*
        if(bytes-current_byte >= tmp.header.GetLength()){
 	 printf("k3\n");
@@ -461,19 +548,19 @@ bool MPMT2::ProcessData(void* data){
 	 printf("k7\n");
        }
        */
-	unsigned int tmp_bin = (daq_header->GetCoarseCounter() & 4294901760U ) | (tmp.header.GetCoarseCounter() >>16);
-	if((daq_header->GetCoarseCounter() & 65535U) > (tmp.header.GetCoarseCounter() >>16)) tmp_bin +=65536U;
-	tmp_bin = tmp_bin >> 6;
+       //	unsigned int tmp_bin = (daq_header->GetCoarseCounter() & 4294901760U ) | (tmp.header.GetCoarseCounter() >>16);
+       //if((daq_header->GetCoarseCounter() & 65535U) > (tmp.header.GetCoarseCounter() >>16)) tmp_bin +=65536U;
+       //	tmp_bin = tmp_bin >> 6;
 	//printf("k1 channel=%u : %u\n", tmp.header.GetChannel(), tmp_bin);
 
-	if(!local_data.count(tmp_bin)){
-	  local_data[tmp_bin] = new MPMTData();
-	  local_data[tmp_bin]->coarse_counter=tmp_bin<<6;
-	}
-	  if(card_type!=3U) local_data[tmp_bin]->mpmt_waveforms.push_back(tmp);
+	//if(!local_data.count(tmp_bin)){
+       // local_data[tmp_bin] = new MPMTData();
+       //  local_data[tmp_bin]->coarse_counter=tmp_bin<<6;
+       //}
+       //  if(card_type!=3U) local_data[tmp_bin]->mpmt_waveforms.push_back(tmp);
 	  //	if(card_type==3U && tmp.header.GetChannel() >= 10) local_data[tmp_bin]->extra_waveforms.push_back(tmp);
-	if(card_type==3U) local_data[tmp_bin]->extra_waveforms.push_back(tmp);
-    }
+       //if(card_type==3U) local_data[tmp_bin]->extra_waveforms.push_back(tmp);
+       }
     else{
       //printf("currentbyte=%u\n",current_byte);
       //printf("bytes=%u\n",bytes);
@@ -482,33 +569,59 @@ bool MPMT2::ProcessData(void* data){
       
       std::string tmp="ERROR: Waveform data from MPMT" +  std::to_string(card_id)  +" is courupt or of uknown structure.";
       msgs->m_data->services->SendLog(tmp,0);
-      for(std::map<unsigned int, MPMTData*>::iterator it=local_data.begin(); it!=local_data.end(); it++){
-	delete it->second;
-	it->second=0;
+      // for(std::map<unsigned int, MPMTData*>::iterator it=local_data.begin(); it!=local_data.end(); it++){
+      //	delete it->second;
+      //	it->second=0;
+      //}
+      //local_data.clear();
+      // delete msgs->daq_header;
+      //msgs->daq_header=0;
+      //delete msgs->mpmt_data;
+      //msgs->mpmt_data=0;
+      delete msgs->mpmt_message;
+      msgs->mpmt_message=0;
+      for(unsigned int i=0; i<triggers_info.size(); i++){
+	delete triggers_info.at(i);
+	triggers_info.at(i)=0;
       }
-      local_data.clear();
-      delete msgs->daq_header;
-      msgs->daq_header=0;
-      delete msgs->mpmt_data;
-      msgs->mpmt_data=0;
       delete msgs;
       msgs=0;
       return false;
       
     }
-  }  
-    //printf("data processed \n");
+    }
+  //  }
+
+  //printf("data processed \n");
   
   /////////////////////////////////////////////////
   ////adding data to datamodel
   ////////////////////////////////////////////////////
   //printf("d5\n");
+
+    msgs->m_data->data_chunks_mtx.lock();
+    if(msgs->m_data->data_chunks.count(bin)==0){
+      msgs->m_data->data_chunks[bin]=new MPMTCollection;
+    }
+
+    msgs->m_data->data_chunks[bin]->mtx.lock();
+    msgs->m_data->data_chunks[bin]->mpmt_output.push_back(msgs->mpmt_message);
+    /*    if(triggers.size())   msgs->m_data->data_chunks[bin]->triggers.insert( msgs->m_data->data_chunks[bin]->triggers.end(), triggers.begin(), triggers.end());
+    if(leds.size()) msgs->m_data->data_chunks[bin]->leds.insert( msgs->m_data->data_chunks[bin]->leds.end(), leds.begin(),leds.end());
+    */    
+if(triggers_info.size())   msgs->m_data->data_chunks[bin]->triggers_info.insert( msgs->m_data->data_chunks[bin]->triggers_info.end(), triggers_info.begin(), triggers_info.end());
+
     
+    msgs->m_data->data_chunks[bin]->mtx.unlock();
+
+    msgs->m_data->data_chunks_mtx.unlock();
+	
+  /*
   msgs->m_data->unsorted_data_mtx.lock();
   for(std::map<unsigned int, MPMTData*>::iterator it=local_data.begin(); it!=local_data.end(); it++){
     delete it->second;
     it->second=0;
-    /*
+    
     //printf("d6\n");
     //printf("time %u:MPMT%u:current=%u\n", it->first, card_id, ((msgs->m_data->current_coarse_counter >>22) - 60));
     //    it->second.Print();
@@ -583,22 +696,25 @@ bool MPMT2::ProcessData(void* data){
   //printf("d7\n");
   msgs->m_data->unsorted_data_mtx.unlock();
 
-    */
+    
+
+
   }
+  */
   //printf("d8\n");
     //printf("in send unsorted triggercard\n");
    
   //printf("d9\n");
   //  msgs->m_data->unsorted_data[bin]->Print();
   //printf("d10\n");
-  std::stringstream tmp;
-  tmp<<"MPMT:"<<card_id;
-  msgs->m_data->hit_map[tmp.str()]++;
+    //  std::stringstream tmp;
+    //  tmp<<"MPMT:"<<card_id;
+    //msgs->m_data->hit_map[tmp.str()]++;
   //printf("delete data\n");
-  delete msgs->daq_header;
-  msgs->daq_header=0;
-  delete msgs->mpmt_data;
-  msgs->mpmt_data=0;
+  //delete msgs->daq_header;
+  //msgs->daq_header=0;
+  //delete msgs->mpmt_data;
+  //msgs->mpmt_data=0;
   delete msgs;
   msgs=0;
   //printf("datadeleted all good\n");

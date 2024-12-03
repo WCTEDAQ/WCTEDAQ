@@ -18,6 +18,7 @@ public:
   TriggerType type;
   unsigned long time;
   std::vector<WCTEMPMTLED> mpmt_LEDs;
+  unsigned int card_id=0;
   unsigned long spill_num=0;
   unsigned vme_event_num=0; 
   

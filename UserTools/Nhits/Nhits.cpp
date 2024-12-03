@@ -43,7 +43,7 @@ bool Nhits::Finalise(){
 }
 
 bool Nhits::NhitsAlgo(void* data){
-
+  
   Trigger_algo_args* args=reinterpret_cast<Trigger_algo_args*>(data);
   
   unsigned int threshold=0;
@@ -52,14 +52,21 @@ bool Nhits::NhitsAlgo(void* data){
   args->trigger_vars->Get("nhits_threshold", threshold); // maybe need to throw something here or return false // seems like this should be covered form the laod variables so maybe no longer needed.
   args->trigger_vars->Get("nhits_jump", jump);
   args->trigger_vars->Get("nhits_window_size", window_size);
-
+  
   
   for(unsigned int i=0; i<(sizeof(args->sorted_data->cumulative_sum)/sizeof(unsigned int))-window_size; i++){
     if((args->sorted_data->cumulative_sum[i+window_size] - args->sorted_data->cumulative_sum[i]) >= threshold){
       TriggerInfo tmp;
       tmp.type=TriggerType::NHITS;
       //tmp.time = ((((unsigned long) args->sorted_data->coarse_counter) << 32) & 0b1111111111111111111111111100000000000000000000000000000000000000) | (( ((unsigned long)i) << 13) & 0b0000000000000000000000000011111111111111111111111111111111111111);
-      tmp.time = (((unsigned long) args->sorted_data->coarse_counter) << 16) | ((unsigned long) i);
+      
+      tmp.time = ((((unsigned long) args->sorted_data->coarse_counter) & 4294901760U) << 16)  |  ((unsigned long) i);
+      /*      if(( args->sorted_data->coarse_counter & 65535U) > (i >>16)){
+	tmp.time +=4294967296U;
+      }
+      */
+      
+      //      tmp.time = (((unsigned long) args->sorted_data->coarse_counter) << 16) | ((unsigned long) i);
       args->sorted_data->unmerged_triggers_mtx.lock();
       args->sorted_data->unmerged_triggers.push_back(tmp);
       args->sorted_data->unmerged_triggers_mtx.unlock();

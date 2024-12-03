@@ -1,5 +1,5 @@
-#ifndef MPMT2_H
-#define MPMT2_H
+#ifndef MPMT3_H
+#define MPMT3_H
 
 #include <string>
 #include <iostream>
@@ -8,19 +8,20 @@
 #include "DataModel.h"
 
 
-struct MPMT2Messages{
+struct MPMT3Messages{
 
-  MPMT2Messages();
-  ~MPMT2Messages();
-  zmq::message_t* daq_header;
-  zmq::message_t* mpmt_data;
+  MPMT3Messages();
+  ~MPMT3Messages();
+  MPMTMessage* mpmt_message;
+  //  zmq::message_t* daq_header;
+  //zmq::message_t* mpmt_data;
   DataModel* m_data;
   unsigned int* time_corrections; 
-
+  std::map<std::string, unsigned int> *hit_rates;
 };
 
 /**
- * \struct MPMT2_args
+ * \struct MPMT3_args
  *
  * This is a struct to place data you want your thread to acess or exchange with it. The idea is the datainside is only used by the threa\
 d and so will be thread safe
@@ -30,10 +31,10 @@ d and so will be thread safe
 */
 
 
-struct MPMT2_args:Thread_args{
+struct MPMT3_args:Thread_args{
 
-  MPMT2_args();
-  ~MPMT2_args();
+  MPMT3_args();
+  ~MPMT3_args();
   zmq::socket_t* data_sock;
   DAQUtilities* utils;
   std::map<std::string,Store*> connections;
@@ -47,12 +48,12 @@ struct MPMT2_args:Thread_args{
   JobQueue* job_queue;
   DataModel* m_data;
   unsigned int time_corrections[200];
-  
+  std::map<std::string, unsigned int>* hit_rates;
 
 };
 
 /**
- * \class MPMT2
+ * \class MPMT3
  *
  * This is a template for a Tool that dynamically more or less threads, such that there is always 1 available thread.This can therefore be used to scale to your worklaod, however be carefull when using more than one of these tools and to apply upperlimits if necessary both locally within this tool and globally so that more threads than is practical are created causing massive inefficency. Please fill out the descripton and author information.
  *
@@ -60,12 +61,12 @@ struct MPMT2_args:Thread_args{
  * $Date: 2019/05/28 10:44:00 $
  */
 
-class MPMT2: public Tool {
+class MPMT3: public Tool {
 
 
  public:
 
-  MPMT2(); ///< Simple constructor
+  MPMT3(); ///< Simple constructor
   bool Initialise(std::string configfile,DataModel &data); ///< Initialise Function for setting up Tool resorces. @param configfile The path and name of the dynamic configuration file to read in. @param data A reference to the transient data class used to pass information between Tools.
   bool Execute(); ///< Executre function used to perform Tool perpose. 
   bool Finalise(); ///< Finalise funciton used to clean up resorces.
@@ -78,7 +79,7 @@ class MPMT2: public Tool {
 
   static void Thread(Thread_args* arg); ///< Function to be run by the thread in a loop. Make sure not to block in it
   Utilities* m_util; ///< Pointer to utilities class to help with threading
-  std::vector<MPMT2_args*> args; ///< Vector of thread args (also holds pointers to the threads)
+  std::vector<MPMT3_args*> args; ///< Vector of thread args (also holds pointers to the threads)
 
   unsigned int m_freethreads; ///< Keeps track of free threads
   unsigned long m_threadnum; ///< Counter for unique naming of threads

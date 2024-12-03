@@ -169,8 +169,8 @@ bool Trigger2::TriggerJob(void* data){
   //printf("r5\n");
   args->data->triggered_data_mtx.lock();
   //printf("r6\n");
-  // delete  args->sorted_data;
-  args->data->triggered_data[args->bin] = args->sorted_data;
+  //delete  args->sorted_data;
+   args->data->triggered_data[args->bin] = args->sorted_data;
   //printf("r7\n");
   args->data->triggered_data_mtx.unlock();
   //printf("r8\n");
@@ -181,62 +181,65 @@ bool Trigger2::TriggerJob(void* data){
 }
 
 bool Trigger2::MainTrigger(void* data){
-//printf("m1\n");
-Trigger_algo_args* args=reinterpret_cast<Trigger_algo_args*>(data);
- //printf("m2\n");
- for(unsigned int i=0; i<args->sorted_data->mpmt_triggers.size(); i++){
-//printf("m3\n");
-   TriggerInfo tmp_trigger;
-//printf("m4\n");
-   switch(args->sorted_data->mpmt_triggers.at(i).GetChannel()){
-
-   case 0U: //main trigger
-     tmp_trigger.type = TriggerType::MAIN;
-     tmp_trigger.time = ((unsigned long) args->sorted_data->coarse_counter << 16) |  ((unsigned long) args->sorted_data->mpmt_triggers.at(i).GetCoarseCounter());
-     tmp_trigger.spill_num = args->m_data->spill_num;
-     tmp_trigger.vme_event_num = args->m_data->vme_event_num;       
-     args->m_data->vme_event_num++;
-     args->sorted_data->unmerged_triggers.push_back(tmp_trigger);
-     break;
-     
-   case 1U: //beam monitor - electron
-     tmp_trigger.type = TriggerType::EBEAM;
-     tmp_trigger.time = ((unsigned long) args->sorted_data->coarse_counter << 16) |  ((unsigned long) args->sorted_data->mpmt_triggers.at(i).GetCoarseCounter());
-     args->sorted_data->unmerged_triggers.push_back(tmp_trigger);
-     break;
-     
-   case 2U: //beam monitor - muon
-     tmp_trigger.type = TriggerType::MBEAM;
-     tmp_trigger.time = ((unsigned long) args->sorted_data->coarse_counter << 16) |  ((unsigned long) args->sorted_data->mpmt_triggers.at(i).GetCoarseCounter());
-     args->sorted_data->unmerged_triggers.push_back(tmp_trigger);     
-     break;
-     
-   case 3U: //pre spill trigger
-     args->m_data->spill_num++;
-     break;
-     
-   case 4U: //beam end
-     break;
-     
-     break;
-   case 5U: //CDS laser
-     tmp_trigger.type = TriggerType::LASER;
-     tmp_trigger.time = ((unsigned long) args->sorted_data->coarse_counter << 16) |  ((unsigned long) args->sorted_data->mpmt_triggers.at(i).GetCoarseCounter());
-     args->sorted_data->unmerged_triggers.push_back(tmp_trigger);    
-     break;
-     
-   case 7U: //hardware trigger
-     tmp_trigger.type = TriggerType::HARD6;
-     tmp_trigger.time = ((unsigned long) args->sorted_data->coarse_counter << 16) |  ((unsigned long) args->sorted_data->mpmt_triggers.at(i).GetCoarseCounter());
-     args->sorted_data->unmerged_triggers.push_back(tmp_trigger); 
-     break;
-
-   }  
-   //printf("m1\n");
-   
- }
- return true;
- 
+  //printf("m1\n");
+  Trigger_algo_args* args=reinterpret_cast<Trigger_algo_args*>(data);
+  //printf("m2\n");
+  for(unsigned int i=0; i<args->sorted_data->mpmt_triggers.size(); i++){
+    //printf("m3\n");
+    TriggerInfo tmp_trigger;
+    //printf("m4\n");
+    
+    tmp_trigger.time = ((((unsigned long) args->sorted_data->coarse_counter) & 4294901760U) << 16)  |  ((unsigned long) args->sorted_data->mpmt_triggers.at(i).GetCoarseCounter()); 
+    /*    if(( args->sorted_data->coarse_counter & 65535U) > (args->sorted_data->mpmt_triggers.at(i).GetCoarseCounter() >>16)){
+      tmp_trigger.time +=4294967296U;
+    }
+    */
+    
+    switch(args->sorted_data->mpmt_triggers.at(i).GetChannel()){
+           
+    case 0U: //main trigger
+      tmp_trigger.type = TriggerType::MAIN;
+      
+      tmp_trigger.spill_num = args->m_data->spill_num;
+      tmp_trigger.vme_event_num = args->m_data->vme_event_num;       
+      args->m_data->vme_event_num++; //might need mutex probably definitly need
+      args->sorted_data->unmerged_triggers.push_back(tmp_trigger);
+      break;
+      
+    case 1U: //beam monitor - electron
+      tmp_trigger.type = TriggerType::EBEAM;
+      args->sorted_data->unmerged_triggers.push_back(tmp_trigger);
+      break;
+      
+    case 2U: //beam monitor - muon
+      tmp_trigger.type = TriggerType::MBEAM;
+      args->sorted_data->unmerged_triggers.push_back(tmp_trigger);     
+      break;
+      
+    case 3U: //pre spill trigger
+      args->m_data->spill_num++;
+      break;
+      
+    case 4U: //beam end
+      break;
+      
+      break;
+    case 5U: //CDS laser
+      tmp_trigger.type = TriggerType::LASER;
+      args->sorted_data->unmerged_triggers.push_back(tmp_trigger);    
+      break;
+      
+    case 7U: //hardware trigger
+      tmp_trigger.type = TriggerType::HARD6;
+      args->sorted_data->unmerged_triggers.push_back(tmp_trigger); 
+      break;
+      
+    }  
+    //printf("m1\n");
+    
+  }
+  return true;
+  
 }
 
 bool Trigger2::LedTrigger(void* data){
@@ -246,7 +249,11 @@ bool Trigger2::LedTrigger(void* data){
   for(unsigned int i=0; i<args->sorted_data->mpmt_leds.size(); i++){
     TriggerInfo tmp_trigger;
     tmp_trigger.type = TriggerType::LED;
-    tmp_trigger.time = ((unsigned long) args->sorted_data->coarse_counter << 16) |  ((unsigned long) args->sorted_data->mpmt_leds.at(i).GetCoarseCounter());
+    tmp_trigger.time = ((((unsigned long) args->sorted_data->coarse_counter) & 4294901760U) << 16)  |  ((unsigned long) args->sorted_data->mpmt_triggers.at(i).GetCoarseCounter()); 
+    /*  if(( args->sorted_data->coarse_counter & 65535U) > (args->sorted_data->mpmt_triggers.at(i).GetCoarseCounter() >>16)){
+      tmp_trigger.time +=4294967296U;
+    }
+    */
     args->sorted_data->unmerged_triggers.push_back(tmp_trigger);
     
   }

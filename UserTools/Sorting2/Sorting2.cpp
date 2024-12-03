@@ -43,6 +43,8 @@ bool Sorting2::Execute(){
     ExportConfiguration();
     
   }
+  //  printf("unsorted data size=%u\n",m_data->unsorted_data.size());
+  // printf("sorted data size=%u\n",m_data->sorted_data.size());
   /*
   usleep(1000);
   m_data->monitoring_store_mtx.lock();
@@ -125,6 +127,8 @@ void Sorting2::Thread(Thread_args* arg){
 
 bool Sorting2::SortData(void* data){
   //printf("in sortdata\n");
+
+ 
   Sorting2_args* args=reinterpret_cast<Sorting2_args*>(data);
   //printf("h1\n");
   
@@ -133,16 +137,15 @@ bool Sorting2::SortData(void* data){
   args->tmp->coarse_counter=args->unsorted_data->coarse_counter;
   //printf("h3\n");
   //  args->unsorted_data->Print();
-  
-  args->arr = new unsigned int[4194304U];
+
+  args->arr = new unsigned int[4194304U]; //23bits
   memset(&args->arr[0], 0, sizeof(*args->arr)*4194304U);
   //   for( unsigned int i=0; i<4194304U; i++){
   //  printf("%u:%u\n",i, args->arr[i]);
   // }
   //printf("h4\n");//////////sort mpmt hits ///////////////
   unsigned int bin=0;
-  
-  
+ 
   //printf("d5 hits size=%d\n", args->unsorted_data->mpmt_hits.size());
   if(args->unsorted_data->mpmt_hits.size() > 0){
     for(std::vector<WCTEMPMTHit>::iterator it=args->unsorted_data->mpmt_hits.begin(); it!= args->unsorted_data->mpmt_hits.end(); it++){
@@ -363,6 +366,8 @@ bool Sorting2::SortData(void* data){
   args->data->sorted_data_mtx.lock();
   //  unsigned int a=args->tmp->coarse_counter >> 6;
   if(args->data->sorted_data.count(args->tmp->coarse_counter >> 6)) printf("DAAMMMMMMM!!\n");
+  //delete args->tmp;
+  //args->tmp=0;
   args->data->sorted_data[args->tmp->coarse_counter >> 6]=args->tmp;
   //delete args->data->sorted_data[args->tmp->coarse_counter >> 6];
   //args->data->sorted_data[a]=0;
