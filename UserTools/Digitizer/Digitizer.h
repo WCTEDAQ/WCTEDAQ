@@ -20,7 +20,24 @@ class Digitizer: public ToolFramework::Tool {
     bool acquiring() const { return acquiring_; };
 
   protected:
-    using Event = std::vector<Hit>;
+    struct Event {
+      std::vector<Hit> hits;
+      std::unique_ptr<std::mutex> mutex;
+
+      Event(): mutex(new std::mutex()) {};
+      Event(Event&& event): mutex(std::move(event.mutex)) {};
+    };
+
+    template <typename RawEvent>
+    class Chops {
+      public:
+        bool chop_event(size_t cycle, RawEvent& event, bool head);
+        void clear() { chops.clear(); };
+
+      private:
+        std::map<size_t, RawEvent> chops;
+        std::mutex                 mutex;
+    };
 
     // Connects and configures the boards. Returns the number of boards and a
     // pointer to VMEReadout object to store data in. This method is called
@@ -43,15 +60,16 @@ class Digitizer: public ToolFramework::Tool {
     ) = 0;
 
     // Processes the data read from board `board_index`. The data shall be
-    // converted to hits and stored in the result of `get_event` which takes an
-    // event number and returns a vector of hits, one hit per channel for all
-    // channels of all boards.
-    // This method if called from the worker job queues
+    // converted to hits and stored in the result of `get_event` which
+    // takes an event number and returns an event associated with this event
+    // number. The event has a vector of hits to be filled by this function and
+    // a mutex which should be locked while the vector is being changed.
+    // This method is called from the worker job queues.
     virtual void process(
-      size_t                                  cycle,
-      const std::function<Event& (uint32_t)>& get_event,
-      unsigned                                board_index,
-      std::vector<Packet>                     board_data
+        size_t                                  cycle,
+        const std::function<Event& (uint32_t)>& get_event,
+        unsigned                                board_index,
+        std::vector<Packet>                     board_data
     ) = 0;
 
   private:
@@ -60,6 +78,7 @@ class Digitizer: public ToolFramework::Tool {
       size_t                           cycle;
     };
 
+    bool     standalone     = false;
     bool     acquiring_     = false;
     unsigned nboards        = 0;
     VMEReadout<Hit>* output = nullptr;
@@ -78,7 +97,7 @@ class Digitizer: public ToolFramework::Tool {
     // for cycles[i].second: both the previous cycles and the next cycle have
     //                       been processed.
     // cycles[i].second is the largest event number seen during processing of this cycle.
-    // cycles[i].first the smallest event number across largest event number per board.
+    // cycles[i].first is the smallest event number across largest event number per board.
     std::map<size_t, std::pair<uint32_t, uint32_t>> cycles;
     std::mutex cycles_mutex;
 
@@ -94,6 +113,22 @@ class Digitizer: public ToolFramework::Tool {
         typename std::map<uint32_t, Event>::iterator end
     );
 
+};
+
+template <typename Packet, typename Hit>
+template <typename RawEvent>
+bool Digitizer<Packet, Hit>::Chops<RawEvent>::chop_event(
+    size_t cycle, RawEvent& event, bool head
+) {
+  std::lock_guard<std::mutex> lock(mutex);
+  auto pevent = chops.lower_bound(cycle);
+  if (pevent == chops.end() || pevent->first != cycle) {
+    chops.insert(pevent, { cycle, event });
+    return false;
+  };
+  event.merge(pevent->second, head);
+  chops.erase(pevent);
+  return true;
 };
 
 template <typename Packet, typename Hit>
@@ -138,12 +173,10 @@ bool Digitizer<Packet, Hit>::process(Readout readout) {
             // XXX: assuming no overflow of the event number
             if (max_event[iboard] == ~0U || max_event[iboard] < ievent)
               max_event[iboard] = ievent;
-            std::lock_guard<std::mutex> events_lock(events_mutex);
+            std::lock_guard<std::mutex> lock(events_mutex);
             auto pevent = events.lower_bound(ievent);
-            if (pevent == events.end() || pevent->first != ievent) {
+            if (pevent == events.end() || pevent->first != ievent)
               pevent = events.insert(pevent, { ievent, Event() });
-              pevent->second.reserve(16);
-            };
             return pevent->second;
           },
           iboard,
@@ -222,36 +255,36 @@ void Digitizer<Packet, Hit>::submit(
     typename std::map<uint32_t, Event>::iterator begin,
     typename std::map<uint32_t, Event>::iterator end
 ) {
-  class values_iterator {
+  class hits_iterator {
     public:
-      values_iterator(typename std::map<uint32_t, Event>::iterator iterator):
+      hits_iterator(typename std::map<uint32_t, Event>::iterator iterator):
         iterator(iterator)
       {};
 
-      bool operator!=(const values_iterator& i) {
+      bool operator!=(const hits_iterator& i) {
         return iterator != i.iterator;
       };
 
-      values_iterator& operator++() {
+      hits_iterator& operator++() {
         ++iterator;
         return *this;
       };
 
-      values_iterator  operator++(int) {
-        values_iterator i(iterator);
+      hits_iterator  operator++(int) {
+        hits_iterator i(iterator);
         ++iterator;
         return i;
       };
 
-      Event& operator*() const {
-        return iterator->second;
+      std::vector<Hit>& operator*() const {
+        return iterator->second.hits;
       };
 
     public:
       typename std::map<uint32_t, Event>::iterator iterator;
   };
 
-  output->push(values_iterator(begin), values_iterator(end));
+  output->push(hits_iterator(begin), hits_iterator(end));
 };
 
 template <typename Packet, typename Hit>
@@ -283,6 +316,7 @@ bool Digitizer<Packet, Hit>::Initialise(std::string configfile, DataModel& data)
     InitialiseConfiguration(std::move(configfile));
 
     if (!m_variables.Get("verbose", m_verbose)) m_verbose = 1;
+    m_variables.Get("standalone", standalone);
 
     init(nboards, output);
     readout_cycle = 0;
@@ -306,6 +340,12 @@ template <typename Packet, typename Hit>
 bool Digitizer<Packet, Hit>::Execute() {
   if (nboards == 0) return true;
   try {
+    if (standalone) {
+      if (acquiring_) stop_acquisition();
+      start_acquisition();
+      return true;
+    };
+
     if (m_data->run_start && !acquiring_) start_acquisition();
 
     if (m_data->change_config) {

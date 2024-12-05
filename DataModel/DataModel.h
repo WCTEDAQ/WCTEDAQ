@@ -4,6 +4,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <unordered_map>
 
 #include <zmq.hpp>
 
@@ -114,8 +115,14 @@ public:
   std::mutex out_data_chunks_mtx;
 
 
+  void* AlertSubscribe(const std::string& alert, ToolFramework::AlertFunction);
+  void AlertUnsubscribe(const std::string& alert, void* handle);
   
 private:
+
+  // We need to subscribe V1290 and V792 to the beam spill alert, but ToolDAQ
+  // does not support multiple receivers on an alert.
+  std::unordered_map<std::string, std::list<ToolFramework::AlertFunction>> alerts;
   
   
   //std::map<std::string,TTree*> m_trees; 

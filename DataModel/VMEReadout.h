@@ -5,6 +5,11 @@
 #include <mutex>
 #include <vector>
 
+#include <zmq.hpp>
+
+#include <QDCHit.h>
+#include <TDCHit.h>
+
 template <typename Hit>
 class VMEReadout {
 public:
@@ -56,7 +61,6 @@ namespace VMEReadout_ {
 
   template <> struct Header<QDCHit> {
     static constexpr const char signature[] = "QDC";
-
   };
 
   template <> struct Header<TDCHit> {
