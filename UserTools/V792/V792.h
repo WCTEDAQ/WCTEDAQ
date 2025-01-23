@@ -15,11 +15,23 @@ class V792: public Digitizer<caen::V792::Packet, QDCHit> {
       uint32_t (*readout)(Board&, caen::V792::Buffer&);
       int      vme_handle;
       uint32_t vme_address;
-      unsigned event_map[32];
+    };
+
+    struct RawEvent {
+      caen::V792::Header     header;
+      caen::V792::EndOfBlock trailer;
+      caen::V792::Data       hits[32];
+      unsigned               nhits;
+
+      void merge(RawEvent& event, bool tail);
     };
 
     std::vector<Board> boards;
     caen::V792::Buffer buffer;
+    Chops<RawEvent>    chops;
+    void*              on_spill;
+
+    void chop_event(size_t cycle, RawEvent&, bool head);
 
     void connect();
     void configure() final;
@@ -43,6 +55,18 @@ class V792: public Digitizer<caen::V792::Packet, QDCHit> {
         unsigned                                qdc_index,
         std::vector<caen::V792::Packet>         qdc_data
     ) final;
+
+    void process(
+        const std::function<Event& (uint32_t)>& get_event,
+        RawEvent&
+    );
+
+    void process(
+        const std::function<Event& (uint32_t)>& get_event,
+        caen::V792::Header,
+        caen::V792::Data*,
+        caen::V792::EndOfBlock
+    );
 };
 
 #endif

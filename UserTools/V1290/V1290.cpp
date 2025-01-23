@@ -10,20 +10,7 @@ void V1290::RawEvent::merge(RawEvent& event, bool tail) {
   else
     header  = event.header;
   if (ettt == 0) ettt = event.ettt;
-  memcpy(hits + nhits, event.hits, event.nhits * sizeof(*hits));
-  nhits += event.nhits;
-};
-
-bool V1290::chop_event(size_t cycle, RawEvent& event, bool head) {
-  std::lock_guard<std::mutex> lock(chops_mutex);
-  auto pevent = chops.lower_bound(cycle);
-  if (pevent == chops.end() || pevent->first != cycle) {
-    chops.insert(pevent, { cycle, event });
-    return false;
-  };
-  event.merge(pevent->second, head);
-  chops.erase(pevent);
-  return true;
+  hits.insert(hits.end(), event.hits.begin(), event.hits.end());
 };
 
 void V1290::connect() {
@@ -308,20 +295,30 @@ void V1290::init(unsigned& nboards, VMEReadout<TDCHit>*& output) {
   configure();
   nboards = boards.size();
   output  = &m_data->tdc_readout;
+  on_spill = m_data->AlertSubscribe(
+      "SpillCount",
+      [this](const char* alert, const char* payload) {
+        for (auto& board : boards) board.tdc.reset_event();
+      }
+  );
 };
 
 void V1290::fini() {
   boards.clear();
+  if (on_spill) {
+    m_data->AlertUnsubscribe("SpillCount", on_spill);
+    on_spill = nullptr;
+  };
 };
 
 void V1290::start_acquisition() {
+  chops.clear();
   for (auto& board : boards) board.tdc.clear();
   Digitizer<caen::V1290::Packet, TDCHit>::start_acquisition();
 };
 
 void V1290::stop_acquisition() {
   Digitizer<caen::V1290::Packet, TDCHit>::stop_acquisition();
-  chops.clear();
 };
 
 void V1290::process(
@@ -334,17 +331,29 @@ void V1290::process(
 
   RawEvent event;
   event.ettt  = 0;
-  event.nhits = 0;
+  auto copy_hits = [&](
+      std::vector<caen::V1290::Packet>::const_iterator header,
+      std::vector<caen::V1290::Packet>::const_iterator trailer,
+      unsigned nhits
+  ) {
+    event.hits.resize(nhits);
+    unsigned i = 0;
+    for (auto packet = header == tdc_data.end() ? tdc_data.begin() : header + 1;
+         packet != trailer;
+         ++packet)
+      if (packet->type() == caen::V1290::Packet::TDCMeasurement)
+        event.hits[i++] = packet->as<caen::V1290::TDCMeasurement>();
+  };
 
-  auto packet = tdc_data.begin();
-  bool chop = false;
-  for (; packet != tdc_data.end(); ++packet)
+  unsigned nhits = 0;
+  auto header = tdc_data.end();
+  for (auto packet = tdc_data.begin(); packet != tdc_data.end(); ++packet)
     switch (packet->type()) {
       case caen::V1290::Packet::GlobalHeader:
+        header = packet;
+        nhits  = 0;
         event.header = packet->as<caen::V1290::GlobalHeader>();
         event.ettt   = 0;
-        event.nhits  = 0;
-        chop = true;
         break;
 
       case caen::V1290::Packet::TDCError:
@@ -356,34 +365,35 @@ void V1290::process(
         break;
 
       case caen::V1290::Packet::TDCMeasurement:
-        event.hits[event.nhits++] = packet->as<caen::V1290::TDCMeasurement>();
+        ++nhits;
         break;
 
       case caen::V1290::Packet::GlobalTrailer:
-        if (chop || chop_event(cycle, event, false))
+        copy_hits(header, packet, nhits);
+        if (header != tdc_data.end() || chops.chop_event(cycle, event, false))
           process(get_event, event);
-        chop = false;
+        header = tdc_data.end();
         break;
-    };
+    }
 
-  if (chop && chop_event(cycle + 1, event, true))
-    process(get_event, event);
+  if (header != tdc_data.end()) {
+    copy_hits(header, tdc_data.end(), nhits);
+    if (chops.chop_event(cycle + 1, event, true))
+      process(get_event, event);
+  };
 };
 
 void V1290::process(
     const std::function<Event& (uint32_t)>& get_event,
-    RawEvent& raw_event
+    RawEvent& raw
 ) {
-  Event& event = get_event(raw_event.header.event());
-  for (int h = 0; h < raw_event.nhits; ++h)
-    event.push_back(
-        TDCHit(
-          raw_event.header,
-          raw_event.hits[h],
-          raw_event.ettt,
-          raw_event.trailer
-        )
-    );
+  Event& event = get_event(raw.header.event());
+
+  std::lock_guard<std::mutex> lock(*event.mutex);
+  size_t n = event.hits.size();
+  event.hits.reserve(n + raw.hits.size());
+  for (auto& hit : raw.hits)
+    event.hits.emplace_back(raw.header, hit, raw.ettt, raw.trailer);
 };
 
 void V1290::readout(
@@ -395,17 +405,87 @@ void V1290::readout(
 };
 
 void V1290::report_error(unsigned tdc_index, caen::V1290::TDCError error) {
-  auto flags = error.errors();
-  volatile auto& reported = boards[tdc_index].errors;
+  uint16_t flags = error.errors();
+  volatile uint16_t& reported = boards[tdc_index].errors;
   if ((reported & flags) == flags) return;
   std::lock_guard<std::mutex> lock(tdc_errors_mutex);
   if ((reported & flags) == flags) return;
+  uint16_t unreported = flags & ~reported;
+  reported |= flags;
   *m_log
     << ML(0)
     << "V1290 " << tdc_index
-    << " reports error 0x" << std::hex << flags << std::dec
+    << " reports error 0x" << std::hex << unreported << std::dec
     << " in TDC " << static_cast<int>(error.tdc())
-    << std::endl;
-  // TODO: send alert
-  reported |= flags;
+    << ": ";
+
+  bool comma_ = false;
+  auto comma = [&]() mutable {
+    if (comma_)
+      *m_log << ", ";
+    else
+      comma_ = true;
+  };
+
+  auto report_group_errors = [&](
+      unsigned    bit,
+      const char* singular,
+      const char* plural,
+      const char* reason
+  ) {
+    int groups[4];
+    int n = 0;
+    for (int group = 0; group < 4; ++group)
+      if (unreported & 1 << 3 * group + bit)
+        groups[n++] = group;
+    if (n == 0) return;
+
+    comma();
+
+    *m_log << (n == 1 ? singular : plural);
+    bool comma2 = false;
+    for (int i = 0; i < n; ++i) {
+      if (comma2)
+        *m_log << ", ";
+      else
+        comma2 = true;
+      *m_log << groups[i];
+    };
+    *m_log << reason;
+  };
+
+  report_group_errors(
+      0,
+      "hit lost in group ",
+      "hits lost in groups ",
+      " due to readout FIFO overflow"
+  );
+  report_group_errors(
+      1,
+      "hit lost in group ",
+      "hits lost in groups ",
+      " due to L1 buffer overflow"
+  );
+  report_group_errors(
+      2,
+      "hit error has been detected in group ",
+      "hits errors have been detected in groups ",
+      ""
+  );
+
+  if (unreported & 1 << 12) {
+    comma();
+    *m_log << "hits rejected because of programmed event size limit";
+  };
+
+  if (unreported & 1 << 13) {
+    comma();
+    *m_log << "event lost due to trigger FIFO overflow";
+  };
+
+  if (unreported & 1 << 14) {
+    comma();
+    *m_log << "internal fatal chip error has been detected";
+  };
+  // TODO: send alarm
 };

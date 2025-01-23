@@ -6,12 +6,22 @@
 #include "V792.h"
 #include "caen.h"
 
+void V792::RawEvent::merge(RawEvent& event, bool tail) {
+  if (tail)
+    trailer = event.trailer;
+  else
+    header  = event.header;
+  memcpy(hits + nhits, event.hits, event.nhits * sizeof(*hits));
+  nhits += event.nhits;
+};
+
 void V792::connect() {
   auto connections = caen_connections(m_variables);
   boards.reserve(connections.size());
   for (auto& connection : connections) {
     caen_report_connection(*m_log << ML(3), "V792", connection);
     Board board { caen::V792(connection) };
+    board.vme_address = connection.vme;
     uint16_t firmware = board.qdc.firmware_revision();
     *m_log
       << ML(3)
@@ -25,7 +35,6 @@ void V792::connect() {
         << ML(2)
         << "V792: old firmware detected, using FIFOBLT for readout"
         << std::endl;
-      board.vme_address = connection.vme;
       board.vme_handle  = board.qdc.vme_handle();
       board.readout     = readout_fifoblt;
     } else {
@@ -146,10 +155,20 @@ void V792::init(unsigned& nboards, VMEReadout<QDCHit>*& output) {
   configure();
   nboards = boards.size();
   output  = &m_data->qdc_readout;
+  on_spill = m_data->AlertSubscribe(
+      "SpillCount",
+      [this](const char* alert, const char* payload) {
+        for (auto& board : boards) board.qdc.reset_event_counter();
+      }
+  );
 };
 
 void V792::fini() {
   boards.clear();
+  if (on_spill) {
+    m_data->AlertUnsubscribe("SpillCount", on_spill);
+    on_spill = nullptr;
+  };
 };
 
 void V792::start_acquisition() {
@@ -244,29 +263,99 @@ void V792::process(
 ) {
   if (qdc_data.empty()) return;
 
-  if (qdc_data.front().type() != caen::V792::Packet::Header) {
-    // should never happen
-    std::stringstream ss;
-    ss << "QDC: unexpected packet 0x" << std::dec << qdc_data.front();
-    throw std::runtime_error(ss.str());
+  auto packet = qdc_data.begin();
+
+  auto skip_fillers = [&]() {
+    while (   packet != qdc_data.end()
+           && packet->type() == caen::V792::Packet::Invalid)
+      ++packet;
   };
 
-  std::vector<caen::V792::Packet>::iterator pheader;
-  for (auto packet = qdc_data.begin(); packet != qdc_data.end(); ++packet)
-    switch (packet->type()) {
-      case caen::V792::Packet::Header:
-        pheader = packet;
-        break;
+  skip_fillers();
+  if (packet == qdc_data.end()) return;
 
-      case caen::V792::Packet::EndOfBlock: {
-        Event& event = get_event(packet->as<caen::V792::EndOfBlock>().event());
+  RawEvent* event = nullptr;
 
-        auto ptrailer = packet;
-        for (packet = pheader + 1; packet != ptrailer; ++packet)
-          if (packet->type() == caen::V792::Packet::Data)
-            event.push_back(QDCHit(*pheader, *packet, *ptrailer));
-
-        break;
-      };
+  if (packet->type() != caen::V792::Packet::Header) {
+    // alloca is to avoid initialization of event --- all fields will be
+    // overwritten anyway
+    event = reinterpret_cast<RawEvent*>(alloca(sizeof(*event)));
+    event->nhits = 0;
+    while (packet->type() != caen::V792::Packet::EndOfBlock) {
+      if (event->nhits >= 32)
+        throw std::runtime_error("QDC: too many hits in an event");
+      event->hits[event->nhits++] = packet++->as<caen::V792::Data>();
+      if (packet == qdc_data.end())
+        throw std::runtime_error("QDC: unexpected end of a chopped event");
     };
+    event->trailer = packet->as<caen::V792::EndOfBlock>();
+    if (chops.chop_event(cycle, *event, false))
+      process(get_event, *event);
+    skip_fillers();
+  };
+
+  while (packet != qdc_data.end()) {
+    if (packet->type() != caen::V792::Packet::Header) {
+      std::stringstream ss;
+      ss
+        << "QDC: unexpected packet 0x"
+        << std::hex << *packet
+        << ", expected header";
+      throw std::runtime_error(ss.str());
+    };
+
+    auto header   = packet++->as<caen::V792::Header>();
+    auto ptrailer = packet + header.count();
+    if (ptrailer < qdc_data.end()) {
+      auto trailer = ptrailer->as<caen::V792::EndOfBlock>();
+      process(
+          get_event,
+          header,
+          static_cast<caen::V792::Data*>(&*packet),
+          trailer
+      );
+      packet = ptrailer;
+      ++packet;
+      skip_fillers();
+    } else {
+      if (!event) event = reinterpret_cast<RawEvent*>(alloca(sizeof(*event)));
+      event->header = header;
+      event->nhits  = 0;
+      while (++packet != qdc_data.end())
+        event->hits[event->nhits++] = packet->as<caen::V792::Data>();
+      if (chops.chop_event(cycle + 1, *event, true))
+        process(get_event, *event);
+    };
+  };
+};
+
+void V792::process(
+    const std::function<Event& (uint32_t)>& get_event,
+    RawEvent&                               event
+) {
+  if (event.nhits != event.header.count()) {
+    std::stringstream ss;
+    ss
+      << "QDC: mismatched chopped event: expected "
+      << static_cast<unsigned>(event.header.count())
+      << " hits, got "
+      << event.nhits;
+    throw std::runtime_error(ss.str());
+  };
+  process(get_event, event.header, event.hits, event.trailer);
+};
+
+void V792::process(
+    const std::function<Event& (uint32_t)>& get_event,
+    caen::V792::Header                      header,
+    caen::V792::Data*                       data,
+    caen::V792::EndOfBlock                  trailer
+) {
+  Event& event = get_event(trailer.event());
+  uint8_t nhits = header.count();
+
+  std::lock_guard<std::mutex> lock(*event.mutex);
+  size_t n = event.hits.size();
+  event.hits.reserve(n + nhits);
+  while (nhits--) event.hits.emplace_back(header, *data++, trailer);
 };

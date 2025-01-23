@@ -1,13 +1,20 @@
 This tool operates with CAEN V1290 time to digital converters. The tool connects
 to a number of V1290s, reads them out sequentially and stores the data in
-`DataModel::v1290_readout` for further processing. Readout is performed by
+`DataModel::tdc_readout` for further processing. Readout is performed by
 continuous polling of the cards.
 
 * `V1290::Initialise` connects to and configures the cards.
 * `V1290::Execute` starts the readout thread.
 * `V1290::Finalise` stops the readout thread and closes the connections.
 
-Each setting in the configuration file can be specified either as
+The following settings configure the tool in general:
+
+* `verbose`, integer: log verbosity level. The lower level, the more important
+  the log message is.
+* `standalone`, boolean: when 1, the tool does not require RunControl in the
+  toolchain and can operate independently.
+
+Each TDC setting in the configuration file can be specified either as
 ```
 setting_name value
 ```
