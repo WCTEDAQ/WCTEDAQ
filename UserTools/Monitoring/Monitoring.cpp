@@ -58,7 +58,7 @@ bool Monitoring::Execute(){
   m_data->vars.Get("part",part);
   m_data->monitoring_store.Get("pool_threads",workers);
   
-  tmp<< runinfo<<" buffers: unsorted| sorted| triggered| readout = "<<m_data->unsorted_data.size()<<"| "<<m_data->sorted_data.size()<<"| "<<m_data->triggered_data.size()<<"| "<<m_data->readout_windows->size()<<" (files="<<part<<") jobs:workers = "<<m_data->job_queue.size()<<":"<<workers<<" ["<<m_data->data_chunks.size()<<":"<<m_data->out_data_chunks->size()<<"]";
+  tmp<< runinfo<<" buffers: unsorted| sorted| triggered| readout = "<<m_data->unsorted_data.size()<<"| "<<m_data->sorted_data.size()<<"| "<<m_data->triggered_data.size()<<"| "<<m_data->readout_windows->size()<<" (files="<<part<<") jobs:workers = "<<m_data->job_queue.size()<<":"<<workers<<" ["<<m_data->data_chunks.size()<<":";//<<m_data->out_data_chunks->size()<<"]";
   m_data->vars.Set("Status",tmp.str());
   
   return true;

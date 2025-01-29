@@ -6,6 +6,8 @@
 #include <zmq.hpp>
 #include <mutex>
 
+
+
 struct MPMTWaveformHeader{
 
   
@@ -69,6 +71,18 @@ private:
   
 };
 
+struct P_MPMTWaveformHeader {
+
+  MPMTWaveformHeader* waveform_header;
+  unsigned short card_id;
+  P_MPMTWaveformHeader(MPMTWaveformHeader* in_waveform_header, short in_card_id){
+    waveform_header=in_waveform_header;
+    card_id=in_card_id;
+
+  }
+
+};
+
 
 
 struct MPMTHit{
@@ -120,6 +134,19 @@ struct MPMTHit{
   unsigned char data[11];
   
 };
+
+struct P_MPMTHit {
+
+  MPMTHit* hit;
+  unsigned short card_id;
+  P_MPMTHit(MPMTHit* in_hit, short in_card_id){
+    hit=in_hit;
+    card_id=in_card_id;
+
+  }
+  
+};
+
 
 struct MPMTLED{
 
@@ -193,6 +220,8 @@ class MPMTMessage : public SerialisableObject{
   
   zmq::message_t daq_header;
   zmq::message_t mpmt_data;
+  std::vector<P_MPMTHit> hits;
+  std::vector<P_MPMTWaveformHeader> waveforms;
   
   bool Print(){ return true;}
   std::string GetVersion(){return "1.0";}

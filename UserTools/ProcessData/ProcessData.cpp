@@ -153,7 +153,7 @@ for(std::map<unsigned int, MPMTCollection*>::iterator it=args->data->data_chunks
  
    args->data->out_data_chunks_mtx.unlock();
  
-   }
+      }
    else{
      for(unsigned int i=0; i<it->second->mpmt_output.size(); i++){
        delete it->second->mpmt_output.at(i);
@@ -165,6 +165,7 @@ for(std::map<unsigned int, MPMTCollection*>::iterator it=args->data->data_chunks
      }
      delete it->second;
    }
+   
    it->second=0;
    
  }
