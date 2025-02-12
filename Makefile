@@ -3,11 +3,13 @@ ToolFrameworkCore=$(Dependencies)/ToolFrameworkCore
 ToolDAQFramework=$(Dependencies)/ToolDAQFramework
 SOURCEDIR=`pwd`
 
-CXXFLAGS=  -fPIC -O3 -g -std=c++11 -Wno-comment #-fsanitize=address # -Wpedantic -Wall -Wno-unused -Wextra -Wcast-align -Wcast-qual -Wctor-dtor-privacy -Wdisabled-optimization -Wformat=2 -Winit-self -Wlogical-op -Wmissing-declarations -Wmissing-include-dirs -Wnoexcept  -Woverloaded-virtual -Wredundant-decls -Wshadow -Wsign-conversion -Wsign-promo -Wstrict-null-sentinel -Wstrict-overflow=5 -Wswitch-default -Wundef #-Werror -Wold-style-cast 
+CXXFLAGS=  -fPIC -std=c++11 -Wno-comment #-fsanitize=address # -Wpedantic -Wall -Wno-unused -Wextra -Wcast-align -Wcast-qual -Wctor-dtor-privacy -Wdisabled-optimization -Wformat=2 -Winit-self -Wlogical-op -Wmissing-declarations -Wmissing-include-dirs -Wnoexcept  -Woverloaded-virtual -Wredundant-decls -Wshadow -Wsign-conversion -Wsign-promo -Wstrict-null-sentinel -Wstrict-overflow=5 -Wswitch-default -Wundef #-Werror -Wold-style-cast 
 
 
 ifeq ($(MAKECMDGOALS),debug)
 CXXFLAGS+= -O0 -g -lSegFault -rdynamic -DDEBUG
+else
+CXXFLAGS+= -O3
 endif
 
 DataModelInclude = -I $(Dependencies)/caen/include
@@ -22,18 +24,25 @@ ZMQInclude= -I $(Dependencies)/zeromq-4.0.7/include/
 BoostLib= -L $(Dependencies)/boost_1_66_0/install/lib -lboost_date_time -lboost_serialization -lboost_iostreams
 BoostInclude= -I $(Dependencies)/boost_1_66_0/install/include
 
-Includes=-I $(ToolFrameworkCore)/include/ -I $(ToolDAQFramework)/include/ -I $(SOURCEDIR)/include/ $(ZMQInclude) $(BoostInclude)
+RootLib= `root-config --libs` -lWCTE_RootDict
+RootInclude= -isystem`root-config --incdir`
+
+Includes=-I $(ToolFrameworkCore)/include/ -I $(ToolDAQFramework)/include/ -I $(SOURCEDIR)/include/ $(ZMQInclude) $(BoostInclude) $(RootInclude)
 ToolLibraries = $(patsubst %, lib/%, $(filter lib%, $(subst /, , $(wildcard UserTools/*/*.so))))
-LIBRARIES=lib/libDataModel.so lib/libMyTools.so $(ToolLibraries)
+LIBRARIES=lib/libDataModel.so lib/libMyTools.so $(ToolLibraries) lib/libWCTE_RootDict.so
 DataModelHEADERS:=$(patsubst %.h, include/%.h, $(filter %.h, $(subst /, ,$(wildcard DataModel/*.h))))
 MyToolHEADERS:=$(patsubst %.h, include/%.h, $(filter %.h, $(subst /, ,$(wildcard UserTools/*/*.h) $(wildcard UserTools/*.h))))
 ToolLibs = $(patsubst %.so, %, $(patsubst lib%, -l%,$(filter lib%, $(subst /, , $(wildcard UserTools/*/*.so)))))
 AlreadyCompiled = $(wildcard UserTools/$(filter-out %.so UserTools , $(subst /, ,$(wildcard UserTools/*/*.so)))/*.cpp)
 SOURCEFILES:=$(patsubst %.cpp, %.o,  $(filter-out $(AlreadyCompiled), $(wildcard */*.cpp) $(wildcard */*/*.cpp)))
-Libs=-L $(SOURCEDIR)/lib/ -lDataModel -L $(ToolDAQFramework)/lib/ -lToolDAQChain -lDAQDataModelBase  -lDAQLogging -lServiceDiscovery -lDAQStore -L $(ToolFrameworkCore)/lib/ -lToolChain -lMyTools -lDataModelBase -lLogging -lStore -lpthread  $(ToolLibs) -L $(ToolDAQFramework)/lib/ -lToolDAQChain -lDAQDataModelBase  -lDAQLogging -lServiceDiscovery -lDAQStore $(ZMQLib) $(BoostLib)
+Libs=-L $(SOURCEDIR)/lib/ -lDataModel -L $(ToolDAQFramework)/lib/ -lToolDAQChain -lDAQDataModelBase  -lDAQLogging -lServiceDiscovery -lDAQStore -L $(ToolFrameworkCore)/lib/ -lToolChain -lMyTools -lDataModelBase -lLogging -lStore -lpthread  $(ToolLibs) -L $(ToolDAQFramework)/lib/ -lToolDAQChain -lDAQDataModelBase  -lDAQLogging -lServiceDiscovery -lDAQStore $(ZMQLib) $(BoostLib) $(RootLib)
 
 
 #.SECONDARY: $(%.o)
+
+a.out: reader.cpp
+	g++ $(CXXFLAGS) reader.cpp $(Includes) $(Libs) $(DataModelInclude) $(DataModelLib) $(MyToolsInclude) $(MyToolsLib)
+#	g++ reader.cpp -I ./include/ -L ./lib/ -lDataModel -I Dependencies/ToolFrameworkCore/include/ -L Dependencies/ToolFrameworkCore/lib/ -lStore -lDataModelBase -I Dependencies/zeromq-4.0.7/include/ -I Dependencies/ToolDAQFramework/include/ -L Dependencies/ToolDAQFramework/lib/ -lDAQDataModelBase -lDAQStore -I Dependencies/zeromq-4.0.7/include/ -L Dependencies/zeromq-4.0.7/lib/ -lzmq -L Dependencies/boost_1_66_0/install/lib -lboost_date_time -lboost_serialization -lboost_iostreams -I Dependencies/boost_1_66_0/install/include/
 
 all: $(DataModelHEADERS) $(MyToolHEADERS) $(SOURCEFILES) $(LIBRARIES) main NodeDaemon RemoteControl
 
@@ -70,6 +79,11 @@ lib/libDataModel.so: $(patsubst %.cpp, %.o , $(wildcard DataModel/*.cpp)) |   $(
 lib/libMyTools.so: $(patsubst %.cpp, %.o , $(filter-out $(AlreadyCompiled), $(wildcard UserTools/*/*.cpp))) |   $(DataModelHEADERS) $(MyToolHEADERS)
 	@echo -e "\e[38;5;201m\n*************** Making " $@ "****************\e[0m"
 	g++ $(CXXFLAGS) --shared $^ -o $@ $(Includes) $(DataModelInclude) $(MyToolsInclude)
+
+lib/libWCTE_RootDict.so: DataModel/DAQInfo.h DataModel/ReadoutWindow.h DataModel/MPMTMessages.h DataModel/MPMTWaveformSamples.h RootDict/libWCTE_RootDict.so RootDict/WCTE_RootDict_rdict.pcm
+	@echo -e "\e[38;5;201m\n*************** Making " $@ "****************\e[0m"
+	$(MAKE) -C RootDict
+	@cp -f RootDict/libWCTE_RootDict.so RootDict/WCTE_RootDict_rdict.pcm lib/
 
 lib/%.so:
 	@echo -e "\e[38;5;87m\n*************** sym linking Tool libs ****************\e[0m"

@@ -28,7 +28,7 @@ service_kick_sec 60 		      # remove hosts with no heartbeat after given period
 ###### Backend Services #####   NEWLY ADDED NEEDS TO HAVE PROPER DESCRIPTIONS AND SOME PRUNING BEFORE RELEASE
 use_backend_services 1		#
 db_name daq			#
-verbosity 1			#
+verbosity 9			#
 max_retries 3			#
 advertise_endpoints 0		#
 resend_period_ms 1000		#

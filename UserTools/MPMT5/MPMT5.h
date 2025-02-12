@@ -44,10 +44,10 @@ struct MPMT5_args:Thread_args{
   std::string data_port;
   bool message_received;
   bool no_data;
+  unsigned int* time_corrections; 
   boost::posix_time::time_duration lapse;
   JobQueue* job_queue;
   DataModel* m_data;
-  unsigned int time_corrections[200];
   std::map<std::string, unsigned int>* hit_rates;
 
 };
@@ -85,6 +85,13 @@ class MPMT5: public Tool {
   unsigned long m_threadnum; ///< Counter for unique naming of threads
   std::string m_mpmt_port;
   unsigned int m_mpmt_search_period_sec;
+
+  bool m_beam_stopping;
+
+  
+  boost::posix_time::ptime m_ref;
+  boost::posix_time::time_duration m_period;
+  boost::posix_time::time_duration m_lapse;
   
   static bool ProcessData(void* data);
   //static WCTEMPMTHit ProcessMPMTHit(char* data, unsinged long& start);

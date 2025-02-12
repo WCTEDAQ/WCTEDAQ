@@ -1,0 +1,269 @@
+#include "LED.h"
+
+LED_args::LED_args():Thread_args(){}
+
+LED_args::~LED_args(){}
+
+// each fine tick is 8ns
+// lowest coarse counter bit is 16, so 2^16 = 65536*8ns = 524,288ns = 524us = 0.524ms
+// so ~1.9 ticks per ms.
+const unsigned int TICKS_PER_MS = 2;
+
+LED::LED():Tool(){}
+
+bool LED::Initialise(std::string configfile, DataModel &data){
+	
+	m_configfile=configfile;
+	InitialiseTool(data);
+	InitialiseConfiguration(configfile);
+	//m_variables.Print();
+	
+	if(!m_variables.Get("verbose",m_verbose)) m_verbose=1;
+	
+	
+	LoadConfig();  // FIXME check return value for valid LED configure
+	
+	ExportConfiguration();
+	
+	ReinitSequence();
+	
+	return true;
+}
+
+void LED::ReinitSequence(){
+	
+	last = boost::posix_time::microsec_clock::universal_time();
+	sequence_num = 0;
+	sequences_performed = 0;
+	spills_since_last_flash = 0;
+	
+	// since we wait at least the delay_after_beam seconds before first flash,
+	// wait this time at the start of the run as well, in case the run started just after a beamspill end signal
+	last_beamspill_end = boost::posix_time::microsec_clock::universal_time() + boost::posix_time::milliseconds(delay_after_beam_ms);
+	
+	return;
+}
+
+
+bool LED::Execute(){
+	
+	if(m_data->change_config){
+		InitialiseConfiguration(m_configfile);
+		LoadConfig();
+		ExportConfiguration();
+		ReinitSequence();
+	}
+	
+	if(sequences_performed > sequence_repetitions) return true;
+	
+	// just in case ben doesn't put a timestamp of when the beam spill ended in the datamodel, track it ourselves
+	if(last_beam_active && !m_data->beam_active){
+		last_beamspill_end = boost::posix_time::microsec_clock::universal_time();
+		++spills_since_last_flash;
+	}
+	last_beam_active = m_data->beam_active;
+	// for when he does
+	//last_beamspill_end = m_data->last_beamspill_end;
+	
+	// if only flashing every Nth beam spill, check if enough beamspills have passed since last flash
+	if(spill_modulus!=0 && (spills_since_last_flash%spill_modulus)!=0){
+		return true;
+	}
+	
+	// calculate time since last flash
+	lapse = period - (boost::posix_time::microsec_clock::universal_time() - last);
+	
+	if(!lapse.is_negative()) return true; // not yet time for next led alert
+	
+	// if we're in the hold-off period after a beamspill, delay sending the alert
+	lapse = boost::posix_time::microsec_clock::universal_time() - last_beamspill_end;
+	if(lapse.total_milliseconds() > delay_after_beam_ms){
+		//Log("Delaying LED flash during beam",v_debug,m_verbose);
+		return true;
+	}
+	
+	// ok time to send next alert
+	std::string json = BuildMPMTJson(sequence_num, sequence_repetitions);
+	printf("Sending alert for LED flash repetition %d, sequence %d to MPMTs\n",sequences_performed, sequence_num);
+	m_data->services->AlertSend("LEDTrigger", json);  // TODO check return val
+	
+	// move to next flash in sequence
+	++sequence_num;
+	if(sequence_num == firing_sequence.size() || sequences_performed==sequence_repetitions){
+		// if we've reached the end of the sequence, go back to the start
+		// (if we just completed the final sequence, we send one final alert to reset the MPMT LED registers)
+		sequence_num=0;
+		++sequences_performed;
+	}
+	
+	last = boost::posix_time::microsec_clock::universal_time();
+	spills_since_last_flash = 0;
+	
+	return true;
+}
+
+
+bool LED::Finalise(){
+	
+	return true;
+}
+
+void LED::Thread(Thread_args* arg){
+
+	LED_args* args=reinterpret_cast<LED_args*>(arg);
+
+}
+
+bool LED::LoadConfig(){
+	
+	// Tool settings
+	// =============
+	if(!m_variables.Get("verbose",m_verbose)) m_verbose=1;
+	
+	// send out alert 20ms before flashing is to start
+	int alert_prewarn_ms = 20;
+	m_variables.Get("alert_prewarn_ms",alert_prewarn_ms);
+	alert_prewarn_counts = alert_prewarn_ms * TICKS_PER_MS;
+	
+	// LED settings
+	// ============
+	int sequence_version;
+	if(!m_variables.Get("LED_Config_ID",sequence_version)){
+		Log("Error: No LED_Config_ID in run config!",v_error,m_verbose);
+		return false;
+	}
+	return LoadSequence(sequence_version);
+	
+}
+
+bool LED::LoadSequence(int version){
+	
+	std::string led_variables_json;
+	if(!m_data->services->GetDeviceConfig(led_variables_json, version, "LED")){
+		Log("LoadSequence Error! Failed to get LED config "+std::to_string(version),v_error,m_verbose);
+		return false;
+	}
+	
+	Store led_variables;
+	led_variables.JsonParser(led_variables_json);
+	
+	std::string led_run_type;
+	unsigned int waveform_presamples;
+	unsigned int waveform_samples;
+	std::string sequence_json;
+	std::string settings_json;
+	int period_s;
+	
+	// LED flasher settings
+	// ====================
+	led_variables.Get("RunType",led_run_type);
+	led_variables.Get("StartDelay", delay_after_beam_ms);
+	led_variables.Get("SpillModulus", spill_modulus);       // nominally 1 during beam
+	led_variables.Get("SequenceRepetitions",sequence_repetitions);
+	++sequence_repetitions; // 1 means run it twice.....
+	led_variables.Get("SamplingStart",waveform_presamples); // XXX put in DataModel
+	led_variables.Get("WaveformLength",waveform_samples);   // XXX put in DataModel
+	led_variables.Get("LedAdvance",led_advance_counts);     // XXX put in DataModel
+	led_variables.Get("LedSettings",settings_json);
+	led_variables.Get("LedSequence",sequence_json);
+	led_variables.Get("WaitToStart",period_s);
+	period=boost::posix_time::seconds(period_s);
+	
+	Store sequence_store;
+	sequence_store.JsonParser(sequence_json);
+	
+	// XXX does Store allow you to get a JSON array into a vector now?
+	std::vector<std::string> sequence_vector;
+	sequence_store.Get("sequence", sequence_vector);
+	
+	// firing_sequence is the vector of settings to be sent to the MPMTs
+	// keep it as a Store so that we can update the StartTime before
+	// converting to JSON to send out
+	firing_sequence.resize(sequence_vector.size());
+	
+	// everything in LedSettings is common to all flashes in the sequence
+	// and needs to go into the alert sent to the MPMTs
+	Store alert_store;
+	alert_store.JsonParser(settings_json);
+	
+	// LedSequence contains the specific settings for each flash in the sequence.
+	// These need to be merged with the common settings to form the alert for each flash
+	for(int i=0; i<sequence_vector.size(); i++){
+		
+		// Store::JsonParser will add/override variables in the given JSON,
+		// while retaining any others that already exist in the Store
+		alert_store.JsonParser(sequence_vector.at(i));
+		
+		firing_sequence.at(i) = alert_store;
+		
+		// the following defines what gets sent to the MPMTs in the alert:
+		/*
+		MPMTID: which MPMT will flash, from LedSequence
+		LED: 0-7 (3-bit bitmask of LEDs on the MPMT), from LedSequence
+		Gain: 0 or 1 (1 is a significant bump to LED intensity), from LedSequence
+		DACSetting: 0-1023 (fine control of LED intensity), from LedSequence
+		StartTime: coarse counter of when to start flashing*, added later
+		NumFlashes: 1-65536, from LedSettings
+		FlashInterval: 1-65536 (in clock ticks), from LedSettings
+		Type: 0=software trigger, 1=ext trigger, from LedSettings // FIXME missing from pdf
+		*/
+		
+	}
+	
+	return true;
+}
+
+std::string LED::BuildMPMTJson(){
+	
+	std::string json;
+	if(sequences_performed<sequence_repetitions){
+		// generate json for next alert
+		firing_sequence.at(sequence_num).Set("StartTime", m_data->current_coarse_counter + alert_prewarn_counts - led_advance_counts);
+		firing_sequence.at(sequence_num)>>json;
+	} else {
+		// since internal MPMT coarse counter will eventually loop, if we leave a valid
+		// StartTime in the MPMT memory, it will eventually start flashing again.
+		// Set it to a special value to prevent this happening.
+		json = "{\"StartTime\":"+std::to_string(0xFFFFFFFFFFFF)+"}";
+	}
+	
+	return json;
+}
+
+/*
+// LED configuration JSON contents:
+RunType: "calibration" or "beam" - redundant
+StartDelay: how long to wait after end of beam spill before resuming flashing
+SpillModulus: only flash every Nth beam spill
+SequenceRepetitions: 0 = only perform the sequence once. 1 = do twice...etc
+SamplingStart: waveform starts specified counts before LED flash
+WaveformLength: number of samples in waveform
+LedAdvance: debug variable required to determine time windows to extract from MPMT data*
+LedSettings: an embedded JSON of...
+	NumFlashes: number of times to flash the LED
+	FlashInterval: time between flashes
+	WaitToStart: delay in coarse counts before moving to next LED.
+	These should be sent to the MPMTs along with other settings in LedSequence
+
+**** make sure that cumulative time of NumFlashes*FlashInterval*number of set bits in LED > sequence duration
+
+// the following defines what gets sent to the MPMTs in the alert:
+MPMTID: which MPMT will flash
+LED: 0-7 (3-bit bitmask of LEDs on the MPMT)
+Gain: 0 or 1 (1 is a significant bump to LED intensity)
+DACSetting: 0-1023 (fine control of LED intensity)
+StartTime: coarse counter of when to start flashing*
+NumFlashes: 1-65536
+FlashInterval: 1-65536 (in clock ticks)
+Type: 0=software trigger, 1=ext trigger
+
+to disable flashing set future time to 0xFFFFFFFFFFFF (48bits of 1)
+
+* due to a firmware bug at present, the LEDs will actually flash ~2us after the requested StartTime
+this needs to be corrected as follows:
+1. subtract the LedAdvance from the actually desired flash coarse counter, and send that value as StartTime to the MPMTs
+2. the MPMT will report the coarse counter on which it believed it flashed (should be close to StartTime)
+3. add LedAdvance to this time to find the actual time of the LED flash. Extract data in windows accordingly.
+
+*/
+

@@ -8,8 +8,10 @@
 #include <bitset>
 #include <string>
 
-#include <SerialisableObject.h>
+#ifndef __CLING__
 #include <BinaryStream.h>
+#endif
+#include <SerialisableObject.h>
 
 class HKMPMTSubHit{
 
@@ -31,7 +33,7 @@ private:
 };
 
 
-class HKMPMTHit : public ToolFramework::SerialisableObject{
+class HKMPMTHit : public SerialisableObject {
 
 public:
   HKMPMTHit(){std::fill(std::begin(data), std::end(data), 0);}
@@ -83,13 +85,15 @@ public:
   std::string GetVersion(){return "1.0";}
 
   std::vector<HKMPMTSubHit> sub_hits;
-
-   bool Serialise(ToolFramework::BinaryStream &bs){
-     bs & data;
-     bs & sub_hits;
-
-     return true;
-   }
+  
+#ifndef __CLING__
+  bool Serialise(BinaryStream &bs){
+    bs & data;
+    bs & sub_hits;
+    
+    return true;
+  }
+#endif
   
 private:
   

@@ -8,10 +8,12 @@
 #include <bitset>
 #include <string>
 
+#ifndef __CLING__
 #include <BinaryStream.h>
+using namespace ToolFramework;
+#endif
 #include <SerialisableObject.h>
 
-using namespace ToolFramework;
 
 class WCTEMPMTWaveformHeader{
   
@@ -125,6 +127,7 @@ public:
   }
   std::string GetVersion(){return "1.0";}
   
+#ifndef __CLING__
   bool Serialise(BinaryStream &bs){
     
     bs & header;
@@ -132,6 +135,7 @@ public:
 
     return true;
   }
+#endif
 
   
 private:

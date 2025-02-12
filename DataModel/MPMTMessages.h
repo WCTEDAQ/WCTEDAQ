@@ -1,15 +1,20 @@
 #ifndef MPMT_MESSAGES_H
 #define MPMT_MESSAGES_H
 
-#include <BinaryStream.h>
 #include <vector>
-#include <zmq.hpp>
 #include <mutex>
+#include <TriggerType.h>
 
+#ifndef __CLING__
+#include <zmq.hpp>
+#include <BinaryStream.h>
+#endif
 
+#include <SerialisableObject.h>
+
+class TriggerInfo;
 
 struct MPMTWaveformHeader{
-
   
   unsigned short GetHeader(){return ((data[0] & 0b11000000) >> 6 );}
   unsigned short GetFlags(){return ((data[0] & 0b00111100) >> 2 );}
@@ -46,7 +51,7 @@ struct MPMTWaveformHeader{
     data[9] = (data[9] & 0b00001111) | ((in & 0b00001111) << 4);
   }
   void SetReserved(unsigned short in){data[9] = (data[9] & 0b11110000) | (in & 0b00001111) ; }
-  void Print(){
+  bool Print(){
         printf("header = %u\n",GetHeader());
 	printf("flags = %u\n",GetFlags());
 	printf("coarse_counter = %u\n",GetCoarseCounter());
@@ -61,26 +66,57 @@ struct MPMTWaveformHeader{
     std::cout<<"num_samples = "<<GetNumSamples()<<std::endl;
     std::cout<<"length = "<<GetLength()<<std::endl;
     std::cout<<"reserved = "<<GetReserved()<<std::endl;
-    
+
+    return true;
   }
   
-  
-private:
-
   unsigned char data[10];
   
 };
 
-struct P_MPMTWaveformHeader {
+struct P_MPMTWaveformHeader :SerialisableObject {
 
-  MPMTWaveformHeader* waveform_header;
+  MPMTWaveformHeader* waveform_header=0;
+  unsigned char* bytes; //! << load bearing comment, don't serialise it ROOT
+  unsigned long spill_num;
   unsigned short card_id;
-  P_MPMTWaveformHeader(MPMTWaveformHeader* in_waveform_header, short in_card_id){
+  bool Print(){return waveform_header->Print();}
+  P_MPMTWaveformHeader(){};
+  
+  P_MPMTWaveformHeader(MPMTWaveformHeader* in_waveform_header, unsigned long in_spill_num, unsigned short in_card_id){
     waveform_header=in_waveform_header;
+    spill_num=in_spill_num;
     card_id=in_card_id;
-
+    bytes = in_waveform_header->GetData() + in_waveform_header->GetLength();
   }
 
+  ~P_MPMTWaveformHeader(){
+
+    //delete waveform_header;
+    waveform_header=0;
+ 
+  }
+  std::string GetVersion(){return "1.0";};
+#ifndef __CLING__
+  bool Serialise(BinaryStream &bs){
+
+    if(waveform_header==0) waveform_header = new MPMTWaveformHeader();
+
+    bs & waveform_header->data;
+
+    if(bs.m_write) bs.Bwrite(&bytes[0], waveform_header->GetLength());
+    else{
+      bytes = new unsigned char[waveform_header->GetLength()];
+      bs.Bread(&bytes[0], waveform_header->GetLength());
+    }
+    
+    bs & spill_num;
+    bs & card_id;
+
+    return true;
+  }
+#endif
+  
 };
 
 
@@ -120,7 +156,7 @@ struct MPMTHit{
     data[9] = in;
   }
   void SetQualityFactor(unsigned short in){ data[10] = in;}
-  void Print(){
+  bool Print(){
     std::cout<<" header = "<<GetHeader()<<std::endl;
     std::cout<<" event_type = "<<GetEventType()<<std::endl;
     std::cout<<" channel = "<<GetChannel()<<std::endl;
@@ -129,82 +165,50 @@ struct MPMTHit{
     std::cout<<" fine_time = "<<GetFineTime()<<std::endl;
     std::cout<<" charge = "<<GetCharge()<<std::endl;
     std::cout<<" quality_factor = "<<GetQualityFactor()<<std::endl;
+    return true;
   }
 
   unsigned char data[11];
   
 };
 
-struct P_MPMTHit {
+struct P_MPMTHit: SerialisableObject {
 
   MPMTHit* hit;
+  bool Print(){ return hit->Print();}
+  
+  unsigned long spill_num;
   unsigned short card_id;
-  P_MPMTHit(MPMTHit* in_hit, short in_card_id){
+  std::string GetVersion(){return "1.0";};
+  P_MPMTHit(){
+    hit=nullptr;
+    spill_num=0;
+    card_id=0;
+  };
+  P_MPMTHit(MPMTHit* in_hit, unsigned long in_spill_num, unsigned short in_card_id){
     hit=in_hit;
-    card_id=in_card_id;
+    spill_num=in_spill_num;
+    card_id = in_card_id;
+  }
+  ~P_MPMTHit(){
+    //delete hit;
+    hit=0;
 
   }
   
-};
+#ifndef __CLING__
+  bool Serialise(BinaryStream &bs){
 
+    if(hit==0) hit=new MPMTHit();
+    
+    bs & hit->data;
+    bs & spill_num;
+    bs & card_id;
 
-struct MPMTLED{
-
-  unsigned short GetHeader(){return (data[0] & 0b11000000) >> 6; }
-  unsigned short GetEventType(){return (data[0] & 0b00111100) >> 2;}
-  unsigned short GetLED(){return ((data[0] & 0b00000011) << 1) | ((data[1] & 0b10000000) >> 7); }
-  bool GetGain(){return ((data[1] & 0b01000000) >> 6);}
-  unsigned short GetDACSetting(){return ((data[1] & 0b00111111)  << 4 ) | ((data[2] & 0b11110000) >>4 ) ;}
-  unsigned short GetType(){return ((data[2] & 0b00001100)  >> 2 );}
-  unsigned short GetSequenceNumber(){return ((data[2] & 0b00000011)  << 12 ) | (data[3] << 4 ) | ((data[4] & 0b11110000 ) >> 4 ) ;}
-  unsigned int GetCoarseCounter(){ return ((data[4] & 0b00001111) << 28) | (data[5] << 20) | (data[6] << 12 ) | (data[7] << 4) | ((data[8] & 0b11110000 ) >> 4 ) ;}
-  unsigned short GetReserved(){return (data[8] & 0b00001111);}
-  static unsigned int GetSize(){return sizeof(data);};
-  unsigned char* GetData(){return data;}  
-
-
+    return true;
+  }
+#endif
   
-  void SetHeader(unsigned short in){ data[0] = (data[0] & 0b00111111) | ((in & 0b00000011) << 6);}
-  void SetEventType(unsigned short in){ data[0] = (data[0] & 0b11000011) | (( in & 0b00001111) << 2) ;}
-  void SetLED(unsigned short in){
-    data[0] = (data[0] & 0b11111100) | ((in & 0b00000110) >> 1);
-    data[1] = (data[1] & 0b01111111)  | ((in & 0b00000001) << 7);
-   }
-  void SetGain(bool in){ data[1] = (data[1] & 0b10111111) | ((in & 0b00000001) << 6) ;}
-  void SetDACSetting(unsigned short in){
-    data[1] = (data[1] & 0b11000000) | ((in >> 4 ) & 0b00111111) ;
-    data[2] = (data[2] & 0b00001111)  | ((in & 0b00001111) << 4 );
-  }
-  void SetType(unsigned short in){ data[2] = (data[2] & 0b11110011) | ((in & 0b00000011) << 2) ;}
-  void SetSequenceNumber(unsigned short in){
-    data[2] = (data[2] & 0b11111100) | ((in >> 12 ) & 0b00000011) ;
-    data[3] = (in >> 4);
-    data[4] = (data[4] & 0b00001111)  | ((in & 0b00001111) << 4 );
-  }
-  void SetCoarseCounter(unsigned int in){
-    data[4] = (data[4] & 0b11110000)  | ((in >> 28 ) & 0b00001111);
-    data[5] = in >> 20;
-    data[6] = in >> 12;
-    data[7] = in >> 4;
-    data[8] = (data[8] & 0b00001111)  | ((in & 0b00001111) << 4 );
-  }
-  void SetReserved(unsigned short in){ data[8] = (data[8] & 0b11110000) | (in & 0b00001111) ;}
-
-  void Print(){
-    std::cout<<" header = "<<GetHeader()<<std::endl;
-    std::cout<<" event_type = "<<GetEventType()<<std::endl;
-    std::cout<<" led = "<<GetLED()<<std::endl;
-    std::cout<<" gain = "<<GetGain()<<std::endl;
-    std::cout<<" dac_setting = "<<GetDACSetting()<<std::endl;
-    std::cout<<" type = "<<GetType()<<std::endl;
-    std::cout<<" sequence_number = "<<GetSequenceNumber()<<std::endl;
-    std::cout<<" coarse_counter = "<<GetCoarseCounter()<<std::endl;
-    std::cout<<" reserved = "<<GetReserved()<<std::endl;
-  }
-
-
-  unsigned char data[9];
-
 };
 
 
@@ -214,6 +218,7 @@ struct MPMTLED{
 
 
  
+#ifndef __CLING__   // TODO move classes to independent headers
 class MPMTMessage : public SerialisableObject{
 
  public:
@@ -238,7 +243,6 @@ class MPMTMessage : public SerialisableObject{
   }
 
 
-
 };
 
 class MPMTCollection : public SerialisableObject{
@@ -247,10 +251,31 @@ class MPMTCollection : public SerialisableObject{
   std::vector<MPMTMessage*> mpmt_output;
   
   std::vector<TriggerInfo*> triggers_info;
-  std::vector<MPMTHit*> triggers;
-  std::vector<MPMTLED*> leds;
+  std::vector<P_MPMTHit*> triggers;
   std::mutex mtx;
 
+  ~MPMTCollection(){
+
+    for(unsigned int i=0; i<mpmt_output.size(); i++){
+      delete mpmt_output.at(i);
+      mpmt_output.at(i)=0;
+    }
+    mpmt_output.clear();
+
+     for(unsigned int i=0; i<triggers_info.size(); i++){
+      delete triggers_info.at(i);
+      triggers_info.at(i)=0;
+    }
+    triggers_info.clear();
+    
+     for(unsigned int i=0; i<triggers.size(); i++){
+      delete triggers.at(i);
+      triggers.at(i)=0;
+    }
+    triggers.clear();
+   
+  }
+  
   bool Print(){ return true;}
   std::string GetVersion(){return "1.0";}
   bool Serialise(BinaryStream &bs){
@@ -265,6 +290,7 @@ class MPMTCollection : public SerialisableObject{
   }
   
 };
+#endif  // CLING ignore
 
 
 

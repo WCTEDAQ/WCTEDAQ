@@ -108,6 +108,7 @@ bool RunControl::Execute(){
 	        std::string errmsg = "ERROR "+m_tool_name+"::Execute failed to send RunStart alert with payload '"+json_payload+"'";
 	        throw std::runtime_error(errmsg);
 	      }
+	      std::cout<<"Sent Alert that new run will start at "<<*m_start_time<<std::endl;
 	      m_data->running=true;
 	      
 	      std::stringstream sql_query;
@@ -135,6 +136,10 @@ bool RunControl::Execute(){
 	      // *m_start_time= difftime(mktime(&utc),mktime(&y2k));
 	      // update DB start time;
 	      // m_data->start_time= *m_start_time;
+	      m_data->spill_num=0;
+	      m_data->beam_active=false;
+	      m_data->beam_stopping=false;
+	      
 	      m_data->readout_num=0;  
 	      m_data->run_start=true;
 	      m_run_start=false;

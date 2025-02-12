@@ -48,17 +48,20 @@ bool Monitoring::Execute(){
       args->data->hit_map[it->first]=0; 
       
     }
+    args->data->hit_map.clear();
   }
  
   std::stringstream tmp;
   std::string runinfo="";
   unsigned long part=0;
   unsigned long workers=0;
+  unsigned long buffer_diff=0;
   m_data->vars.Get("Runinfo",runinfo);
   m_data->vars.Get("part",part);
   m_data->monitoring_store.Get("pool_threads",workers);
+  m_data->monitoring_store.Get("recevie_buffer_max_diff",buffer_diff);
   
-  tmp<< runinfo<<" buffers: unsorted| sorted| triggered| readout = "<<m_data->unsorted_data.size()<<"| "<<m_data->sorted_data.size()<<"| "<<m_data->triggered_data.size()<<"| "<<m_data->readout_windows->size()<<" (files="<<part<<") jobs:workers = "<<m_data->job_queue.size()<<":"<<workers<<" ["<<m_data->data_chunks.size()<<":";//<<m_data->out_data_chunks->size()<<"]";
+  tmp<< runinfo<<" buffers: unsorted| sorted| triggered| readout = "<<m_data->unsorted_data.size()<<"| "<<m_data->sorted_data.size()<<"| "<<m_data->triggered_data.size()<<"| "<<m_data->readout_windows->size()<<" (files="<<part<<") jobs:workers = "<<m_data->job_queue.size()<<":"<<workers<<" ["<<m_data->data_chunks.size()<<":"<<m_data->out_data_chunks->size()<<":"<<m_data->preadout_windows->size()<<"]"<<buffer_diff;
   m_data->vars.Set("Status",tmp.str());
   
   return true;

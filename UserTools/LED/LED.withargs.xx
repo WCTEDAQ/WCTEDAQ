@@ -1,0 +1,383 @@
+#include "LED.h"
+
+LED_args::LED_args():Thread_args(){}
+
+LED_args::~LED_args(){}
+
+
+LED::LED():Tool(){}
+
+int LED::sequence_repetitions;
+unsigned int LED::led_advance_counts;
+unsigned int LED::sequence_period_counts;
+std::vector<Store> LED::firing_sequence;
+unsigned int LED::delay_after_beam_counts;
+
+bool LED::Initialise(std::string configfile, DataModel &data){
+	
+	m_configfile=configfile;
+	InitialiseTool(data);
+	InitialiseConfiguration(configfile);
+	//m_variables.Print();
+	
+	if(!m_variables.Get("verbose",m_verbose)) m_verbose=1;
+	
+	
+	bool ok = LoadConfig();
+	if(!ok) return false;
+	
+	ExportConfiguration();
+	
+	// make a thread to handle sending the alerts
+	m_util=new Utilities();
+	args=new LED_args();
+	args->sequence_period = sequence_period;
+	args->alert_prewarn = alert_prewarn;
+	args->spill_modulus = spill_modulus;
+	args->delay_after_beam = delay_after_beam;
+	args->wait_to_start = wait_to_start;
+	args->m_data = m_data;
+	// rest don't need to be initialised
+	
+	m_util->CreateThread("test", &Thread, args);
+	
+	return true;
+}
+
+void LED::ReinitSequence(){
+	return;
+}
+
+
+bool LED::Execute(){
+	
+	if(m_data->change_config){
+		args->running=false;
+		// XXX sleep for a while to let it stop?
+		InitialiseConfiguration(m_configfile);
+		LoadConfig();
+		ExportConfiguration();
+		args->running=true;
+	}
+	
+	return true;
+}
+
+
+bool LED::Finalise(){
+	
+	m_util->KillThread(args);
+	
+	delete args;
+	args=0;
+	
+	delete m_util;
+	m_util=0;
+	
+	return true;
+}
+
+// will be repeatedly called by Utilities
+void LED::Thread(Thread_args* arg){
+	
+	LED_args* args=reinterpret_cast<LED_args*>(arg);
+		
+	usleep(10);
+	
+	if(!args->running){
+		args->last_running=false;
+		sleep(1);
+		return;
+	}
+	
+	if(!args->last_running){
+		// reset counters on transition to running
+		args->last_beam_active = false;
+		args->last_flash = boost::posix_time::microsec_clock::universal_time();
+		args->last_beamspill_end = boost::posix_time::microsec_clock::universal_time();
+		args->last_beamspill_counts = args->m_data->current_coarse_counter;
+		args->spills_since_last_flash=0;
+		args->sequence_num = 0;
+		args->sequences_performed = 0;
+	}
+	args->last_running=true;
+	
+	// if interleaving with beam
+	if(args->spill_modulus!=0){
+		
+		// just in case ben doesn't put a timestamp of when the beam spill ended in the datamodel, track it ourselves
+		if(args->last_beam_active && !args->m_data->beam_active){
+			args->last_beamspill_end  = boost::posix_time::microsec_clock::universal_time();
+			args->last_beamspill_counts = args->m_data->current_coarse_counter;
+			++args->spills_since_last_flash;
+			//Log("Noting beam spill",v_debug+10,args->m_verbose);
+		}
+		args->last_beam_active = args->m_data->beam_active;
+		// for when he does
+		//last_beamspill_end = m_data->last_beamspill_end;
+		
+		// if only flashing every Nth beam spill, check if enough beamspills have passed since last sequence
+		if(args->spills_since_last_flash<args->spill_modulus){
+			//Log("Waiting for next beam spill...",v_debug+10,args->m_verbose);
+			continue;
+		}
+		
+		// sanity check
+		if(args->spills_since_last_flash>args->spill_modulus){
+			//Log("ERROR! Spills since last flash ("+std::to_string(spills_since_last_flash)
+			//   +") > spill modulus ("+std::to_string(args->spill_modulus)+")!"
+			//   " Possible spill during flash sequence!",v_error,args->m_verbose);
+		}
+		
+		// calculate time since last beamspill end signal
+		args->lapse = boost::posix_time::microsec_clock::universal_time() - args->last_beamspill_end;
+		if(args->lapse < (args->delay_after_beam - args->alert_prewarn)){
+			//Log("Waiting DelayToStart after beam",v_debug+10,args->m_verbose);
+			continue;
+		}
+	}
+	
+	// calculate time since last flash
+	args->lapse =  boost::posix_time::microsec_clock::universal_time() - args->last_flash;
+	if(args->lapse < args->sequence_period){
+		//Log("Waiting sequence period after last flash",v_debug+10,m_verbose);
+		continue;
+	}
+	
+	// ok send next alert
+	std::string json = BuildMPMTJson(args->sequence_num, args->sequences_performed, args->last_beamspill_counts, args->last_flash_counts);
+	//Log("Sending alert for LED flash repetition "+std::to_string(sequences_performed)
+	//   +", sequence "+std::to_string(sequence_num)+" to MPMTs",v_debug,args->m_verbose);
+	bool ok = args->m_data->services->AlertSend("LEDTrigger", json);
+	if(!ok){
+		std::cerr<<"LED::Thread AlertSend returned false! "<<std::endl;
+		continue; // this could flood with errors if we keep failing...
+		// FIXME add a rate-limiting mechanism? move to next flash in sequence? abort sequence? depends on error...
+	}
+	
+	// update time of last flash
+	args->last_flash = boost::posix_time::microsec_clock::universal_time();
+	
+	// move to next flash in sequence
+	++args->sequence_num;
+	
+	// if we've reached the end of the sequence, go back to the start
+	if(args->sequence_num == /*args->*/firing_sequence.size()){
+		args->sequence_num=0;
+		++args->sequences_performed;
+	}
+	
+	// after completing the sequence, we send one final alert to reset the MPMT LED registers
+	// so we only have one element in this trailing pseudo-sequence
+	if(args->sequences_performed==/*args->*/sequence_repetitions && args->sequence_num==1){
+		args->sequence_num=0;
+		args->sequences_performed=0;
+		// and reset number of spills since last flash to start waiting for next beam
+		args->spills_since_last_flash=0;
+	}
+	
+	return;
+}
+
+bool LED::LoadConfig(){
+	
+	if(!m_variables.Get("verbose",m_verbose)) m_verbose=1;
+	
+	// LED flash settings
+	// ==================
+	if(!LoadSequence()) return false;
+	
+	int alert_prewarn_ms = 20;
+	if(!m_variables.Get("alert_prewarn_ms",alert_prewarn_ms));
+	
+	// optional sanity check
+	// ---------------------
+	// we get notice of beam spills 200 ms in advance of spill start.
+	// in order to ensure we don't flash during beam, we need to ensure that
+	// the time from alert to flashing plus duration of flashing is not greater than
+	// the beam start notice. To allow for delays in propagating beam spill notice
+	// to this tool, we actually limit to 1/10th of this: 20ms
+	// we perform the entire sequence SequenceRepetitions times BEFORE the next beam spill.
+	int NumFlashes, FlashInterval, WaitToStart;
+	firing_sequence.front().Get("NumFlashes",NumFlashes);
+	firing_sequence.front().Get("FlashInterval",FlashInterval);
+	firing_sequence.front().Get("WaitToStart",WaitToStart);
+	int TotalSequenceDurationTicks = sequence_repetitions*firing_sequence.size()*(WaitToStart+(NumFlashes*FlashInterval)); // these are in fine ticks, 8ns
+	
+	double min_prewarn_ms = 20. + (TotalSequenceDurationTicks * 8E-6);
+	
+	if(alert_prewarn_ms < min_prewarn_ms){
+		std::string msg = "LED::LoadConfig Warning! Time between MPMT alert and requested flash (alert_prewarn_ms: "
+		                +  std::to_string(alert_prewarn_ms) + ") is too short! Coercing to "+std::to_string(min_prewarn_ms);
+		Log(msg,v_warning,m_verbose);
+		alert_prewarn_ms=min_prewarn_ms;
+	}
+	// ------------------------
+	
+	alert_prewarn = boost::posix_time::milliseconds(alert_prewarn_ms);
+	
+	return true;
+	
+}
+
+
+
+bool LED::LoadSequence(){
+	
+	std::string led_variables_json;
+	if(!m_data->services->GetRunDeviceConfig(led_variables_json, m_data->run_configuration, "LED")){
+		Log("LoadSequence Error! Failed to get LED config for run configuration "+std::to_string(m_data->run_configuration),v_error,m_verbose);
+		return false;
+	}
+	
+	Store led_variables;
+	led_variables.JsonParser(led_variables_json);
+	
+	std::string led_run_type;
+	unsigned int waveform_presamples;
+	unsigned int waveform_samples;
+	std::string sequence_json;
+	std::string settings_json;
+	int delay_after_beam_s;
+	
+	// LED flasher settings
+	// ====================
+	led_variables.Get("RunType",led_run_type);
+	if(led_run_type=="beam"){
+		led_variables.Get("StartDelay", delay_after_beam_s);
+		led_variables.Get("SpillModulus", spill_modulus);
+	} else {
+		delay_after_beam_s=0;
+		spill_modulus=0;
+	}
+	delay_after_beam=boost::posix_time::seconds(delay_after_beam_s);
+	delay_after_beam_counts = delay_after_beam_s*125E6;
+	led_variables.Get("SequenceRepetitions",sequence_repetitions);
+	++sequence_repetitions; // 1 means run it twice.....
+	led_variables.Get("SamplingStart",waveform_presamples); // XXX put in DataModel
+	led_variables.Get("WaveformLength",waveform_samples);   // XXX put in DataModel
+	led_variables.Get("LedAdvance",led_advance_counts);     // XXX put in DataModel
+	led_variables.Get("LedSettings",settings_json);
+	led_variables.Get("LedSequence",sequence_json);
+	
+	Store sequence_store;
+	sequence_store.JsonParser(sequence_json);
+	
+	// XXX does Store allow you to get a JSON array into a vector now?
+	std::vector<std::string> sequence_vector;
+	sequence_store.Get("sequence", sequence_vector);
+	
+	// firing_sequence is the vector of settings to be sent to the MPMTs
+	// keep it as a Store so that we can update the StartTime before
+	// converting to JSON to send out
+	firing_sequence.resize(sequence_vector.size());
+	
+	// everything in LedSettings is common to all flashes in the sequence
+	// and needs to go into the alert sent to the MPMTs
+	Store alert_store;
+	alert_store.JsonParser(settings_json);
+	
+	alert_store.Get("WaitToStart",wait_to_start);
+	int num_flashes, flash_interval;
+	alert_store.Get("NumFlashes",num_flashes);
+	alert_store.Get("FlashInterval",flash_interval);
+	sequence_period_counts = wait_to_start+(num_flashes*flash_interval);
+	if((double(sequence_period_counts)*8)<1000){
+		Log("Error! LED Sequence period "+std::to_string(sequence_period_counts)+" is too short to be timed with us clock!",v_error,m_verbose);
+		return false;
+	}
+	// XXX is this strict enough of a check to ensure we send out alerts in time for the StartCount?
+	sequence_period = boost::posix_time::microseconds(double(sequence_period_counts)*8E-3);
+	std::cout<<"sequence period is "<<sequence_period<<" microseconds"<<std::endl;
+	
+	// LedSequence contains the specific settings for each flash in the sequence.
+	// These need to be merged with the common settings to form the alert for each flash
+	for(int i=0; i<sequence_vector.size(); i++){
+		
+		// Store::JsonParser will add/override variables in the given JSON,
+		// while retaining any others that already exist in the Store
+		alert_store.JsonParser(sequence_vector.at(i));
+		
+		firing_sequence.at(i) = alert_store;
+		
+		// the following defines what gets sent to the MPMTs in the alert:
+		/*
+		MPMTID: which MPMT will flash, from LedSequence
+		LED: 0-7 (3-bit bitmask of LEDs on the MPMT), from LedSequence
+		Gain: 0 or 1 (1 is a significant bump to LED intensity), from LedSequence
+		DACSetting: 0-1023 (fine control of LED intensity), from LedSequence
+		StartTime: coarse counter of when to start flashing*, added later
+		NumFlashes: 1-65536, from LedSettings
+		FlashInterval: 1-65536 (in clock ticks), from LedSettings
+		Type: 0=software trigger, 1=ext trigger, from LedSettings // FIXME missing from pdf
+		*/
+		
+	}
+	
+	return true;
+}
+
+std::string LED::BuildMPMTJson(int sequence_num, int sequences_performed, int last_beamspill_counts, long unsigned int& last_flash_counts){
+	
+	std::string json;
+	if(sequences_performed<sequence_repetitions){
+		// generate json for next alert
+		
+		int StartCounts;
+		if(sequence_num==0){
+			StartCounts = last_beamspill_counts + delay_after_beam_counts - led_advance_counts;
+			last_flash_counts = StartCounts;
+		} else {
+			StartCounts = last_flash_counts + sequence_period_counts;
+			last_flash_counts = StartCounts;
+		}
+		
+		firing_sequence.at(sequence_num).Set("StartTime", StartCounts);
+		firing_sequence.at(sequence_num)>>json;
+	} else {
+		// since internal MPMT coarse counter will eventually loop, if we leave a valid
+		// StartTime in the MPMT memory, it will eventually start flashing again.
+		// Set it to a special value to prevent this happening.
+		json = "{\"StartTime\":"+std::to_string(0xFFFFFFFFFFFF)+"}";
+	}
+	
+	return json;
+}
+
+/*
+// LED configuration JSON contents:
+RunType: "calibration" or "beam" - redundant
+StartDelay: how long to wait after end of beam spill before resuming flashing
+SpillModulus: only flash every Nth beam spill
+SequenceRepetitions: 0 = only perform the sequence once. 1 = do twice...etc
+SamplingStart: waveform starts specified counts before LED flash
+WaveformLength: number of samples in waveform
+LedAdvance: debug variable required to determine time windows to extract from MPMT data*
+LedSettings: an embedded JSON of...
+	NumFlashes: number of times to flash the LED
+	FlashInterval: time between flashes
+	WaitToStart: delay in coarse counts before moving to next LED.
+	These should be sent to the MPMTs along with other settings in LedSequence
+
+**** make sure that cumulative time of NumFlashes*FlashInterval*number of set bits in LED > sequence duration
+
+// the following defines what gets sent to the MPMTs in the alert:
+MPMTID: which MPMT will flash
+LED: 0-7 (3-bit bitmask of LEDs on the MPMT)
+Gain: 0 or 1 (1 is a significant bump to LED intensity)
+DACSetting: 0-1023 (fine control of LED intensity)
+StartTime: coarse counter of when to start flashing*
+NumFlashes: 1-65536
+FlashInterval: 1-65536 (in clock ticks)
+Type: 0=software trigger, 1=ext trigger
+
+to disable flashing set future time to 0xFFFFFFFFFFFF (48bits of 1)
+
+* due to a firmware bug at present, the LEDs will actually flash ~2us after the requested StartTime
+this needs to be corrected as follows:
+1. subtract the LedAdvance from the actually desired flash coarse counter, and send that value as StartTime to the MPMTs
+2. the MPMT will report the coarse counter on which it believed it flashed (should be close to StartTime)
+3. add LedAdvance to this time to find the actual time of the LED flash. Extract data in windows accordingly.
+
+
+*/
