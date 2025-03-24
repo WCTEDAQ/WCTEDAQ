@@ -6,6 +6,7 @@
 #include <GenerateDummyData.h>
 #include <HKMPMT.h>
 #include <JobManager.h>
+#include <LED.h>
 #include <Monitoring.h>
 #include <MPMT2.h>
 #include <MPMT3.h>
@@ -19,6 +20,7 @@
 #include <RunControl.h>
 #include <SlaveRunControl.h>
 #include <Sorting2.h>
+#include <TestAlerts.h>
 #include <testreceive.h>
 #include <Trigger2.h>
 #include <V1290.h>
@@ -29,4 +31,3 @@
 #include <VMESend.h>
 #include <VMETest.h>
 #include <WindowBuilder2.h>
-#include <LED.h>

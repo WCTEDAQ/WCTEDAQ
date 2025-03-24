@@ -71,7 +71,11 @@ public:
   bool sub_run;
   boost::posix_time::ptime start_time;
   unsigned long current_coarse_counter;
-
+  unsigned long spill_update_coarse_counter;
+  
+  bool spill_update_flag;
+  std::mutex spill_update_flag_mtx;
+  
   unsigned long run_number;
   unsigned long sub_run_number;
   unsigned int run_configuration;
@@ -109,10 +113,14 @@ public:
   unsigned long spill_num;
   unsigned long vme_event_num;
   unsigned long readout_num;
+  unsigned long beam_warn_coarse_counts;
 
   bool raw_readout;
   bool hardware_trigger;
   bool nhits_trigger;
+  bool led_trigger;
+  //  bool laser_trigger;
+  bool software_trigger;
 
   std::map<unsigned int, MPMTCollection*> data_chunks;
   std::mutex data_chunks_mtx;
@@ -123,6 +131,10 @@ public:
   std::mutex preadout_windows_mtx;
   std::vector<PReadoutWindow*>* preadout_windows;
   
+  std::mutex mon_preadout_windows_mtx;
+  std::vector<PReadoutWindow*> mon_preadout_windows;
+  unsigned int mon_preadout_ratio;
+  
   unsigned int time_corrections[200];
   
   std::mutex pps_mtx;
@@ -130,6 +142,8 @@ public:
 
   std::mutex mpmt_messages_mtx;
   std::vector<MPMTMessage*>* mpmt_messages;
+
+
 
   void* AlertSubscribe(const std::string& alert, ToolFramework::AlertFunction);
   void AlertUnsubscribe(const std::string& alert, void* handle);

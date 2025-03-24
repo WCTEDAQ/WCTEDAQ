@@ -22,7 +22,10 @@ struct RunControl_args:Thread_args{
   ~RunControl_args();
   boost::posix_time::ptime* start_time;
   unsigned long* current_coarse_counter;
-
+  unsigned long* spill_update_coarse_counter;
+  bool* spill_update_flag;
+  unsigned long* spill_num;
+  std::mutex* spill_update_flag_mtx;
 };
 
 /**

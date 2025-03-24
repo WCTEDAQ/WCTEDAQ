@@ -7,6 +7,7 @@
 #include "Tool.h"
 #include "DataModel.h"
 #include "MPMTWaveformSamples.h"
+#include "MPMTMessageData.h"
 
 class TTree;
 
@@ -23,15 +24,18 @@ struct RootWriter_args:Thread_args{
 
   RootWriter_args();
   ~RootWriter_args();
-  DataModel* data;
+  DataModel* m_data;
   std::string* file_name;
   unsigned long* part_number;
+  uint64_t readout_window_num;
   boost::posix_time::ptime last;
   boost::posix_time::time_duration period;
   boost::posix_time::time_duration lapse;
-  unsigned int* file_writeout_period;
+  long* file_writeout_threshold;
   std::vector<PReadoutWindow*>* readout_windows;
-
+  std::vector<MPMTMessage*>* mpmt_messages;
+  std::vector<WCTEMPMTPPS>* pps;
+  
 };
 
 /**
@@ -66,6 +70,7 @@ class RootWriter: public Tool {
   std::string m_file_name;
   unsigned long m_part_number;
   unsigned int m_file_writeout_period;
+  long m_file_writeout_threshold;
 
 };
 

@@ -18,6 +18,7 @@ struct MPMT5Messages{
   DataModel* m_data;
   unsigned int* time_corrections; 
   std::map<std::string, unsigned int> *hit_rates;
+
 };
 
 /**
@@ -85,6 +86,7 @@ class MPMT5: public Tool {
   unsigned long m_threadnum; ///< Counter for unique naming of threads
   std::string m_mpmt_port;
   unsigned int m_mpmt_search_period_sec;
+  std::string m_configfile;
 
   bool m_beam_stopping;
 
@@ -94,10 +96,12 @@ class MPMT5: public Tool {
   boost::posix_time::time_duration m_lapse;
   
   static bool ProcessData(void* data);
+  static bool ProcessDataFail(void* data);
   //static WCTEMPMTHit ProcessMPMTHit(char* data, unsinged long& start);
   //static WCTEMPMTWaveform ProcessMPMTWaveForm(void* data);
   //static WCTEMPMTLED ProcessMPMTLED(void* data);
   //static WCTEMPMTLED ProcessMPMTLED(void* data);
+  void LoadConfig();
   
 };
 

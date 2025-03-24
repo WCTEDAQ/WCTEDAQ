@@ -6,6 +6,8 @@
 
 #include "Tool.h"
 #include "DataModel.h"
+#include "sys/types.h"
+#include "sys/sysinfo.h"
 
 /**
  * \struct Monitoring_args_args
@@ -29,6 +31,7 @@ struct Monitoring_args:Thread_args{
   boost::posix_time::ptime last2;
   Store hit_rates;
   DataModel* data;
+  zmq::socket_t* sock;
 
 };
 
@@ -59,7 +62,12 @@ class Monitoring: public Tool {
   std::string m_configfile;
   Utilities* m_util;  ///< Pointer to utilities class to help with threading
   Monitoring_args* args; ///< thread args (also holds pointer to the thread)
-  
+  unsigned long out_size;
+  unsigned long cc;
+  float rate;  
+  unsigned long long lastTotalUser, lastTotalUserLow, lastTotalSys, lastTotalIdle;
+  float mem;
+  float cpu;
 
 };
 

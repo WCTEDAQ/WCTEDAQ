@@ -7,7 +7,7 @@ CXXFLAGS= -g -std=c++11
 
 all: libWCTE_RootDict.so
 
-WCTE_RootDict.cxx: $(BASEDIR)/DataModel/DAQInfo.h $(BASEDIR)/DataModel/ReadoutWindow.h $(BASEDIR)/DataModel/MPMTMessages.h $(BASEDIR)/DataModel/MPMTWaveformSamples.h $(BASEDIR)/DataModel/TriggerType.h $(SELFDIR)/SerialisableObject.h WCTE_Linkdef.h
+WCTE_RootDict.cxx: $(BASEDIR)/DataModel/DAQInfo.h $(BASEDIR)/DataModel/ReadoutWindow.h $(BASEDIR)/DataModel/WCTEMPMTPPS.h $(BASEDIR)/DataModel/TDCHit.h $(BASEDIR)/DataModel/QDCHit.h $(BASEDIR)/DataModel/MPMTMessages.h $(BASEDIR)/DataModel/MPMTMessageData.h $(BASEDIR)/DataModel/MPMTWaveformSamples.h $(BASEDIR)/DataModel/TriggerType.h $(SELFDIR)/SerialisableObject.h WCTE_Linkdef.h
 	rootcling $(SILENCERS) -f $@ -I. -I$(BASEDIR)/DataModel -I$(TOOLFDIR)/include -c $^
 
 libWCTE_RootDict.so: WCTE_RootDict.cxx

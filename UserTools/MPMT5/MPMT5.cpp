@@ -57,14 +57,10 @@ bool MPMT5::Initialise(std::string configfile, DataModel &data){
 
   InitialiseTool(data);
   InitialiseConfiguration(configfile);
+  m_configfile=configfile;
   //m_variables.Print();
-  
-  if(!m_variables.Get("verbose",m_verbose)) m_verbose=1;
-  if(!m_variables.Get("MPMT_port",m_mpmt_port)) m_mpmt_port="4444";
-  if(!m_variables.Get("MPMT_search_period_sec",m_mpmt_search_period_sec)) m_mpmt_search_period_sec=10;
-  unsigned int period=0;
-  if(!m_variables.Get("beam_end_delay_sec",period)) period=30;
-  m_period=boost::posix_time::seconds(period);
+
+  LoadConfig();
   
   m_util=new Utilities();
 
@@ -74,13 +70,29 @@ bool MPMT5::Initialise(std::string configfile, DataModel &data){
   m_data->hardware_trigger = false;
   m_data->raw_readout=false;
   m_data->nhits_trigger=false;
-
+  m_data->pps_mtx.lock();
   m_data->pps= new std::vector<WCTEMPMTPPS>;
+  m_data->pps_mtx.unlock();
+  m_data->mpmt_messages_mtx.lock();
   m_data->mpmt_messages= new std::vector<MPMTMessage*>;
+  m_data->mpmt_messages_mtx.unlock();
   
   m_threadnum=0;
   CreateThread();
   m_freethreads=1;
+
+  if(!m_data->out_data_chunks){
+    m_data->out_data_chunks_mtx.lock();
+    m_data->out_data_chunks=new std::map<unsigned int, MPMTCollection*>;
+    m_data->out_data_chunks_mtx.unlock();
+  }
+
+  if(m_data->preadout_windows==0){
+    m_data->preadout_windows_mtx.lock();
+    m_data->preadout_windows=new std::vector<PReadoutWindow*>;
+    m_data->preadout_windows_mtx.unlock();
+  }
+
   
   ExportConfiguration();
 
@@ -93,6 +105,12 @@ bool MPMT5::Initialise(std::string configfile, DataModel &data){
 
 bool MPMT5::Execute(){
 
+  if(m_data->change_config){
+    InitialiseConfiguration(m_configfile);
+    LoadConfig();
+    ExportConfiguration();
+  }
+  
   for(std::map<std::string, unsigned int>::iterator it=m_data->hit_map.begin(); it!=m_data->hit_map.end(); it++){
     m_data->monitoring_store_mtx.lock();
     m_data->monitoring_store.Set(it->first, it->second);
@@ -113,10 +131,45 @@ bool MPMT5::Execute(){
 
       m_beam_stopping=false;
       m_data->beam_active=false;
-      m_data->spill_num++;
+      //      m_data->spill_num++;
     }
   }
-  /*
+
+  if(!m_data->running){
+    
+    m_data->mpmt_messages_mtx.lock();
+    if(m_data->mpmt_messages->size()>0){
+      for(unsigned int i=0 ; i< m_data->mpmt_messages->size(); i++){
+	delete m_data->mpmt_messages->at(i);
+	m_data->mpmt_messages->at(i)=0;
+      }
+      m_data->mpmt_messages->clear();
+    }
+      m_data->mpmt_messages_mtx.unlock();
+    
+    
+    m_data->pps_mtx.lock();
+    if(m_data->pps->size()) m_data->pps->clear();
+    m_data->pps_mtx.unlock();
+    
+
+    m_data->data_chunks_mtx.lock();
+    if(m_data->data_chunks.size()){
+      for( std::map<unsigned int, MPMTCollection*>::iterator it=m_data->data_chunks.begin(); it!=m_data->data_chunks.end(); it++){
+	delete it->second;
+	it->second=0;
+      }
+      m_data->data_chunks.clear();
+      // std::map<unsigned int, MPMTCollection*> tmp;
+      //   m_data->data_chunks.swap(tmp);
+    }
+    m_data->data_chunks_mtx.unlock();
+
+  }
+
+  
+
+     /*
   usleep (1000);
   m_data->unsorted_data_mtx.lock();
   m_data->unsorted_data.clear();
@@ -157,11 +210,14 @@ bool MPMT5::Execute(){
 bool MPMT5::Finalise(){
 
   for(unsigned int i=0;i<args.size();i++) DeleteThread(0);
-  
+
   args.clear();
   
   delete m_util;
   m_util=0;
+  
+
+  
 
   return true;
 }
@@ -196,8 +252,8 @@ void MPMT5::CreateThread(){
   int correction =0;
   for(unsigned int i=0; i<200; i++){
     if(times.Get(std::to_string(i),correction)){
-      //tmparg->time_corrections[i]=correction;
-      tmparg->time_corrections[i]=0;
+      tmparg->time_corrections[i]=correction*12;
+      //tmparg->time_corrections[i]=0;
     }
     else tmparg->time_corrections[i]=0;
   }
@@ -340,16 +396,19 @@ void MPMT5::Thread(Thread_args* arg){
 	//  tmp_msgs->mpmt_data=mpmt_data;
 	tmp_msgs->mpmt_message=mpmt_message;
 	tmp_msgs->m_data=args->m_data;
-	tmp_job->data= tmp_msgs;
 	tmp_msgs->hit_rates=args->hit_rates;
+	tmp_job->data= tmp_msgs;
 	//printf("d1\n");
 	tmp_job->func=ProcessData;
+	tmp_job->fail_func=ProcessDataFail;
 	//printf("d2\n");
-	//delete tmp_msgs;
-	//delete mpmt_message;
-	//delete tmp_job;
+	if(!args->m_data->running){
+	  delete tmp_msgs;
+	  delete mpmt_message;
+	  delete tmp_job;
+	}
 	//printf("d3\n");
-	args->job_queue->AddJob(tmp_job);
+	else args->job_queue->AddJob(tmp_job);
 	//sleep(5);
 	//printf("job submitted %d\n",args->job_queue->size());
       }
@@ -369,18 +428,27 @@ bool MPMT5::ProcessData(void* data){
   unsigned short card_id = daq_header->GetCardID();
   
   unsigned int bin= (daq_header->GetCoarseCounter()) >>7; //+ msgs->time_corrections[card_id]) >> 7;
-
-  if(card_id > 132 || bin > ((msgs->m_data->current_coarse_counter >>23) +150) || ( bin < ((msgs->m_data->current_coarse_counter >>23) - 150) && ((msgs->m_data->current_coarse_counter >>23) >150) ) ){
-    //printf("mpmt=%lu, daq=%lu\n", daq_header->GetCoarseCounter(), msgs->m_data->current_coarse_counter >>16); 
+  //printf("coarse counts: mpmt=%lu, daq=%lu\n", bin, msgs->m_data->current_coarse_counter >>23);
+  
+  ///* comment out for fake data
+  if((card_id > 132 || // invalid card id
+      bin > ((msgs->m_data->current_coarse_counter >>23) +150) || // data too early
+      ( bin < ((msgs->m_data->current_coarse_counter >>23) - 150) && ((msgs->m_data->current_coarse_counter >>23) >150) ) ) // data too late
+     && (msgs->m_data->current_coarse_counter >>23) > 4      ){ // stop error at start of run
     msgs->m_data->services->SendLog("ERROR: throwing away bad data " + std::to_string(card_id),0);
+    
+    std::string reason = "too late";
+    if(card_id>132) reason = "bad card";
+    if(bin > ((msgs->m_data->current_coarse_counter >>23) +150)) reason="too early";
+    printf("bad data: %s, card_id %d, coarse counts: mpmt=%lu, daq=%lu\n", reason.c_str(), card_id, daq_header->GetCoarseCounter(), msgs->m_data->current_coarse_counter >>16);
     delete msgs->mpmt_message;
     msgs->mpmt_message=0;
     delete msgs;
     msgs=0;
     return true;
-    }
+  }
   
-   
+  
   unsigned short card_type = daq_header->GetCardType();
   
   //printf("%u:%u\n", daq_header->GetCardID(), daq_header->GetCoarseCounter());
@@ -445,23 +513,29 @@ bool MPMT5::ProcessData(void* data){
 	//printf("in hit\n");
 	MPMTHit* tmp= reinterpret_cast<MPMTHit*>(&mpmt_data[current_byte]);
 	//	if((!tmp->GetChannel()<10) || card_type!=3U)	msgs->mpmt_message->hits.emplace_back(tmp, msgs->m_data->spill_num, card_id);
-	if(card_type!=3U) msgs->mpmt_message->hits.emplace_back(tmp, msgs->m_data->spill_num, card_id);
+	if(card_type!=3U){
+	  if(card_id != 130 && card_id != 132) msgs->mpmt_message->hits.emplace_back(tmp, msgs->m_data->spill_num, card_id);
+	  else{
+	    P_MPMTHit* tmp_hit= new P_MPMTHit(tmp, msgs->m_data->spill_num, card_id);
+	    triggers.push_back(tmp_hit);
+	  }
+	}
 	//printf("hits.size()=%u\n",hits.size());
 	//	  tmp(card_id, &mpmt_data[current_byte]);
 	//tmp.SetCoarseCounter(tmp.GetCoarseCounter() + 12*msgs->time_corrections[card_id]);
 	//	UWCTEMPMTHit* bob = reinterpret_cast<UWCTEMPMTHit*>(&tmp);
-
+	
 	else{
 	  //  if(tmp->GetChannel()<10 && card_type==3U){
 	  //printf("trigger card\n");
 	  P_MPMTHit* tmp_hit= new P_MPMTHit(tmp, msgs->m_data->spill_num, card_id);
-
+	  
 	  triggers.push_back(tmp_hit);
 	  if(tmp->GetChannel()<10){
 	    TriggerInfo* trigger_info = new TriggerInfo;
-	    trigger_info->time= ((daq_header->GetCoarseCounter() & 4294901760U )<<16)  | (tmp->GetCoarseCounter());
+	    trigger_info->time= (((unsigned long)(daq_header->GetCoarseCounter() & 4294901760U ))<<16)  | (tmp->GetCoarseCounter());
 	    if((daq_header->GetCoarseCounter() & 65535U) > (tmp->GetCoarseCounter() >>16)) trigger_info->time+=65536U;
-	    trigger_info->time+=msgs->time_corrections[card_id];
+	    //trigger_info->time+=msgs->time_corrections[card_id];
 	    trigger_info->card_id=card_id;
 	    trigger_info->spill_num=msgs->m_data->spill_num;
 	    
@@ -486,12 +560,28 @@ bool MPMT5::ProcessData(void* data){
 	      
 	    case 3U: //beam spill warn
 	      msgs->m_data->beam_active=true;
+	      msgs->m_data->beam_stopping=false;
+	      msgs->m_data->beam_warn_coarse_counts= trigger_info->time;
+	      delete trigger_info;
+              trigger_info=0;
+	      msgs->m_data->services->AlertSend("SpillWarn", "");
 	      //trigger_info->type = TriggerType::MBEAM;
 	      //triggers_info.push_back(trigger_info);
 	      break;
 	      
 	    case 4U: //beam spill end
 	      msgs->m_data->beam_stopping=true;
+	      msgs->m_data->beam_active=false;
+	      delete trigger_info;
+              trigger_info=0;
+	      msgs->m_data->spill_update_coarse_counter=msgs->m_data->current_coarse_counter+2500000000;
+	      msgs->m_data->services->AlertSend("SpillEnd", "");
+	      msgs->m_data->spill_update_flag_mtx.lock();
+	      msgs->m_data->spill_update_flag=true;
+	      //    printf("mpmt spill_num before =%lu, b=%d, \n", msgs->m_data->spill_num, msgs->m_data->spill_update_flag);
+	      msgs->m_data->spill_update_flag_mtx.unlock();
+	      // printf("!!!!!!!!!!!!!!!!!!!!!!!!!!!spill end!!!!!!!!!!!!!!!!!!!!\n");
+	      
 	      //trigger_info->type = TriggerType::MBEAM;
 	      //triggers_info.push_back(trigger_info);
 	      break;
@@ -556,7 +646,7 @@ bool MPMT5::ProcessData(void* data){
       //      }// its a pedistal (dont know) 
       
       else if(((mpmt_data[current_byte] >> 2) & 0b00001111 ) == 14U && bytes-current_byte >= WCTEMPMTLED::GetSize()){// its LED
-	printf("in led cardid=%u, coarse counter=%ul\n",card_id, msgs->m_data->current_coarse_counter);
+	//printf("in led cardid=%u, coarse counter=%ul\n",card_id, msgs->m_data->current_coarse_counter);
 	//	WCTEMPMTLED tmp(card_id, &mpmt_data[current_byte]);
 	//tmp.SetCoarseCounter(tmp.GetCoarseCounter() + 12*msgs->time_corrections[card_id]);
 
@@ -564,7 +654,7 @@ bool MPMT5::ProcessData(void* data){
 	P_MPMTLED* tmp_led = new P_MPMTLED(tmp, msgs->m_data->spill_num, card_id);
 	//leds.push_back(tmp_led);
 	//	leds.push_back(tmp);
-	tmp->Print();
+	//tmp->Print();
 
 	TriggerInfo* trigger_info = new TriggerInfo;
 	trigger_info->type= TriggerType::LED;
@@ -597,8 +687,15 @@ bool MPMT5::ProcessData(void* data){
       else if(((mpmt_data[current_byte] >> 2) & 0b00001111 ) == 15U && bytes-current_byte >= WCTEMPMTPPS::GetSize() ){// its PPS
 	//printf("in pps\n");
 	msgs->m_data->pps_mtx.lock();
-	msgs->m_data->pps->emplace_back(card_id, &mpmt_data[current_byte]);
+	//	msgs->m_data->pps->emplace_back(card_id, &mpmt_data[current_byte]);
+	//if((msgs->m_data->pps->back().GetReserved() & 0b10) !=2 && msgs->m_data->pps->back().GetCurrentPPSCoarseCounter() - msgs->m_data->pps->back().GetPreviousPPSCoarseCounter() != 125000000){
+	  //  msgs->m_data->services->SendAlarm("ERROR MPMT"+ std::to_string(card_id)+": PPS check fail current="+std::to_string(msgs->m_data->pps->back().GetCurrentPPSCoarseCounter())+", previous ="+std::to_string(msgs->m_data->pps->back().GetPreviousPPSCoarseCounter()));
+	  //msgs->m_data->services->SendLog("ERROR MPMT"+ std::to_string(card_id)+": PPS check fail current="+std::to_string(msgs->m_data->pps->back().GetCurrentPPSCoarseCounter())+", previous ="+std::to_string(msgs->m_data->pps->back().GetPreviousPPSCoarseCounter()),v_message);
+	//}
+	
 	msgs->m_data->pps_mtx.unlock();
+	
+
 	current_byte+=WCTEMPMTPPS::GetSize();
 	/*	WCTEMPMTPPS tmp(card_id, &mpmt_data[current_byte]);
 	current_byte+=WCTEMPMTPPS::GetSize();
@@ -627,9 +724,16 @@ bool MPMT5::ProcessData(void* data){
 	   delete triggers_info.at(i);
 	   triggers_info.at(i)=0;
 	 }
+	 for(unsigned int i=0; i<triggers.size(); i++){
+	   delete triggers.at(i);
+	   triggers.at(i)=0;
+	 }
+
+	 
 	 delete msgs;
 	 msgs=0;
-	return false;
+	 //printf("d1\n");
+	return true;
 
       }
     }
@@ -646,7 +750,7 @@ bool MPMT5::ProcessData(void* data){
 			     //      waveforms.push_back(tmp);
 
       if(current_byte-1 > bytes ){//|| ((msgs->mpmt_message->waveforms.back().waveform_header->GetLength()*8) /12) != msgs->mpmt_message->waveforms.back().waveform_header->GetNumSamples()){
-	printf("MPMTS SUCK!!!!!!!!!!!!!!! AND THEIR DATA IS GARBAGE  bytes %u = samples %u : cardid=%u \n", msgs->mpmt_message->waveforms.back().waveform_header->GetLength(), msgs->mpmt_message->waveforms.back().waveform_header->GetNumSamples(), card_id);
+	printf("MPMTS GARBAGE DATA  bytes %u = samples %u : cardid=%u \n", msgs->mpmt_message->waveforms.back().waveform_header->GetLength(), msgs->mpmt_message->waveforms.back().waveform_header->GetNumSamples(), card_id);
 	std::string tmp="ERROR: Waveform samples not present card=" +  std::to_string(card_id)  +".";
 	msgs->m_data->services->SendLog(tmp,0);
 	delete msgs->mpmt_message;
@@ -655,9 +759,15 @@ bool MPMT5::ProcessData(void* data){
 	  delete triggers_info.at(i);
 	  triggers_info.at(i)=0;
 	}
+	for(unsigned int i=0; i<triggers.size(); i++){
+	  delete triggers.at(i);
+	  triggers.at(i)=0;
+	}
+
 	delete msgs;
 	msgs=0;
-	return false;
+	//printf("d1\n");
+	return true;
       
     
 
@@ -718,13 +828,19 @@ bool MPMT5::ProcessData(void* data){
 	delete triggers_info.at(i);
 	triggers_info.at(i)=0;
       }
+      for(unsigned int i=0; i<triggers.size(); i++){
+	delete triggers.at(i);
+	triggers.at(i)=0;
+      }
+      
       delete msgs;
       msgs=0;
-      return false;
+      //printf("d1\n");
+      return true;
       
     }
   }
-  // printf("hits.size()=%u\n",hits.size());
+  //printf("MPMT5 hits.size()=%u\n",msgs->mpmt_message->hits.size());
   //  }
 
   //printf("data processed \n");
@@ -746,19 +862,20 @@ bool MPMT5::ProcessData(void* data){
     if(msgs->m_data->data_chunks.count(bin)==0){
       msgs->m_data->data_chunks[bin]=new MPMTCollection;
     }
+    //printf("NEW DATA bin=%u, current size=%u\n",bin, msgs->m_data->data_chunks[bin]->mpmt_output.size()); 
 
     msgs->m_data->data_chunks[bin]->mtx.lock();
     msgs->m_data->data_chunks[bin]->mpmt_output.push_back(msgs->mpmt_message);
     /*    if(triggers.size())   msgs->m_data->data_chunks[bin]->triggers.insert( msgs->m_data->data_chunks[bin]->triggers.end(), triggers.begin(), triggers.end());
     if(leds.size()) msgs->m_data->data_chunks[bin]->leds.insert( msgs->m_data->data_chunks[bin]->leds.end(), leds.begin(),leds.end());
     */    
-if(triggers_info.size()) msgs->m_data->data_chunks[bin]->triggers_info.insert( msgs->m_data->data_chunks[bin]->triggers_info.end(), triggers_info.begin(), triggers_info.end());
-if(triggers.size()) msgs->m_data->data_chunks[bin]->triggers.insert( msgs->m_data->data_chunks[bin]->triggers.end(), triggers.begin(), triggers.end());
-//if(leds.size()) msgs->m_data->data_chunks[bin]->leds.insert( msgs->m_data->data_chunks[bin]->leds.end(), leds.begin(), leds.end());
-
+    if(triggers_info.size()) msgs->m_data->data_chunks[bin]->triggers_info.insert( msgs->m_data->data_chunks[bin]->triggers_info.end(), triggers_info.begin(), triggers_info.end());
+    if(triggers.size()) msgs->m_data->data_chunks[bin]->triggers.insert( msgs->m_data->data_chunks[bin]->triggers.end(), triggers.begin(), triggers.end());
+    //if(leds.size()) msgs->m_data->data_chunks[bin]->leds.insert( msgs->m_data->data_chunks[bin]->leds.end(), leds.begin(), leds.end());
+    
     
     msgs->m_data->data_chunks[bin]->mtx.unlock();
-    /*
+    /* 
     delete msgs->m_data->data_chunks[bin];
     msgs->m_data->data_chunks[bin] =0;
     msgs->m_data->data_chunks.erase(bin);
@@ -856,17 +973,47 @@ if(triggers.size()) msgs->m_data->data_chunks[bin]->triggers.insert( msgs->m_dat
   //printf("d9\n");
   //  msgs->m_data->unsorted_data[bin]->Print();
   //printf("d10\n");
-      std::stringstream tmp;
-      tmp<<"MPMT:"<<card_id;
+    std::stringstream tmp;
+    tmp<<"MPMT:"<<card_id;
     msgs->m_data->hit_map[tmp.str()]++;
-  //printf("delete data\n");
-  //delete msgs->daq_header;
-  //msgs->daq_header=0;
-  //delete msgs->mpmt_data;
-  //msgs->mpmt_data=0;
-  delete msgs;
-  msgs=0;
-  //printf("datadeleted all good\n");
+    //printf("delete data\n");
+    //delete msgs->daq_header;
+    //msgs->daq_header=0;
+    //delete msgs->mpmt_data;
+    //msgs->mpmt_data=0;
+    delete msgs;
+    msgs=0;
+    //printf("datadeleted all good\n");
+    return true;
+    
+}
+
+void MPMT5::LoadConfig(){
+
+  if(!m_variables.Get("verbose",m_verbose)) m_verbose=1;
+  if(!m_variables.Get("MPMT_port",m_mpmt_port)) m_mpmt_port="4444";
+  if(!m_variables.Get("MPMT_search_period_sec",m_mpmt_search_period_sec)) m_mpmt_search_period_sec=10;
+  unsigned int period=0;
+  if(!m_variables.Get("beam_end_delay_sec",period)) period=30;
+  m_period=boost::posix_time::seconds(period);
+
+
+}
+
+bool MPMT5::ProcessDataFail(void* data){
+
+  MPMT5Messages* msgs=reinterpret_cast<MPMT5Messages*>(data);
+
+  /*  if(msgs!=0){
+    delete msgs->mpmt_message;
+    msgs->mpmt_message=0;
+    
+    
+    msgs->m_data->services->SendLog("MPMT: New MPMT ProcessData fil",v_message);
+    delete msgs;
+    msgs=0;
+    }*/
+ printf("MPMT Process data fail\n");
+   
   return true;
-  
 }

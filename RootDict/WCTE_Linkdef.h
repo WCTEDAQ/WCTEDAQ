@@ -5,6 +5,11 @@
 #include "ReadoutWindow.h"
 #include "MPMTMessages.h"
 #include "MPMTWaveformSamples.h"
+#include "MPMTMessageData.h"
+#include "WCTEMPMTPPS.h"
+#include "TDCHit.h"
+#include "QDCHit.h"
+#include "BitFunctions.h"
 #pragma link off all globals;
 #pragma link off all classes;
 #pragma link off all functions;
@@ -14,10 +19,14 @@
 #pragma link C++ class MPMTLED+;
 #pragma link C++ class P_MPMTLED+;
 #pragma link C++ class MPMTHit+;
+#pragma link C++ class WCTEMPMTPPS+;
+#pragma link C++ class TDCHit+;
+#pragma link C++ class QDCHit+;
 #pragma link C++ class P_MPMTHit+;
 #pragma link C++ class MPMTWaveformHeader+;
 #pragma link C++ class P_MPMTWaveformHeader+;
 #pragma link C++ class MPMTWaveformSamples+;
+#pragma link C++ class MPMTMessageData+;
 #pragma link C++ class TriggerInfo+;
 #pragma link C++ class vector<TriggerInfo>+;
 #pragma link C++ class vector<TriggerInfo*>+;

@@ -12,6 +12,7 @@
 
 #include <SerialisableObject.h>
 
+
 class TriggerInfo;
 
 struct MPMTWaveformHeader{
@@ -79,6 +80,7 @@ struct P_MPMTWaveformHeader :SerialisableObject {
   MPMTWaveformHeader* waveform_header=0;
   unsigned char* bytes; //! << load bearing comment, don't serialise it ROOT
   unsigned long spill_num;
+  
   unsigned short card_id;
   bool Print(){return waveform_header->Print();}
   P_MPMTWaveformHeader(){};
@@ -87,16 +89,16 @@ struct P_MPMTWaveformHeader :SerialisableObject {
     waveform_header=in_waveform_header;
     spill_num=in_spill_num;
     card_id=in_card_id;
-    bytes = in_waveform_header->GetData() + in_waveform_header->GetLength();
+    bytes = in_waveform_header->GetData() + in_waveform_header->GetSize();
   }
 
   ~P_MPMTWaveformHeader(){
 
     //delete waveform_header;
     waveform_header=0;
- 
+    bytes=0;
   }
-  std::string GetVersion(){return "1.0";};
+  std::string GetVersion(){return "1";};
 #ifndef __CLING__
   bool Serialise(BinaryStream &bs){
 
@@ -179,7 +181,7 @@ struct P_MPMTHit: SerialisableObject {
   
   unsigned long spill_num;
   unsigned short card_id;
-  std::string GetVersion(){return "1.0";};
+  std::string GetVersion(){return "1";};
   P_MPMTHit(){
     hit=nullptr;
     spill_num=0;
@@ -207,6 +209,42 @@ struct P_MPMTHit: SerialisableObject {
 
     return true;
   }
+
+  void Send(zmq::socket_t* sock, int flag){
+
+    zmq::message_t ms1(sizeof card_id);
+    zmq::message_t ms2(hit->GetSize());
+
+    memcpy(ms1.data(), &card_id, sizeof card_id);
+    memcpy(ms2.data(), hit, hit->GetSize());
+    
+		       //    zmq::message_t ms1(&spill_num,sizeof spill_num, bencleanup);
+		       //zmq::message_t ms2(hit,hits->GetSize(), bencleanup);
+
+    sock->send(ms1, ZMQ_SNDMORE);
+    sock->send(ms2, flag);
+
+  }
+
+  void Receive (zmq::socket_t* sock, bool &more){
+
+    zmq::message_t msg1;
+    sock->recv(&msg1);
+
+    if(msg1.more()){
+      zmq::message_t msg2;
+      sock->recv(&msg2);
+
+
+    memcpy(&card_id, msg1.data(), sizeof(card_id));
+    if(hit==0) hit= new MPMTHit;
+    memcpy(hit, msg2.data(), hit->GetSize());
+    more=msg2.more();
+    }
+    else   more=msg1.more();
+    
+  }
+  
 #endif
   
 };
@@ -229,7 +267,7 @@ class MPMTMessage : public SerialisableObject{
   std::vector<P_MPMTWaveformHeader> waveforms;
   
   bool Print(){ return true;}
-  std::string GetVersion(){return "1.0";}
+  std::string GetVersion(){return "1";}
   bool Serialise(BinaryStream &bs){
 
     unsigned int tmp = daq_header.size();
@@ -256,28 +294,34 @@ class MPMTCollection : public SerialisableObject{
 
   ~MPMTCollection(){
 
+    //printf("c1\n");
     for(unsigned int i=0; i<mpmt_output.size(); i++){
       delete mpmt_output.at(i);
       mpmt_output.at(i)=0;
     }
+    //printf("c2\n");
     mpmt_output.clear();
 
+    //    printf("c3\n");
      for(unsigned int i=0; i<triggers_info.size(); i++){
       delete triggers_info.at(i);
       triggers_info.at(i)=0;
     }
+     //printf("c4\n");
     triggers_info.clear();
-    
+    // printf("c5\n");
+     
      for(unsigned int i=0; i<triggers.size(); i++){
       delete triggers.at(i);
       triggers.at(i)=0;
     }
+     // printf("c6\n");
     triggers.clear();
-   
+    //    printf("c7\n");
   }
   
   bool Print(){ return true;}
-  std::string GetVersion(){return "1.0";}
+  std::string GetVersion(){return "1";}
   bool Serialise(BinaryStream &bs){
 
     unsigned int tmp = mpmt_output.size();

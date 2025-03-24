@@ -6,6 +6,7 @@
 
 #include "Tool.h"
 #include "DataModel.h"
+#include <cmath>
 
 /**
  * \struct NewTrigger_args_args
@@ -23,8 +24,12 @@ struct NewTrigger_args:Thread_args{
   DataModel* m_data;
   unsigned int bin;  
   MPMTCollection* mpmt_collection;
-  unsigned short window_size;
-  unsigned short threashold;
+  unsigned int nhits_window_size;
+  unsigned int nhits_threshold;
+  unsigned int nhits_jump;
+  unsigned short nhits_bit_shift;
+  std::unordered_map<unsigned int, bool> check_time;
+  
 };
 
 /**

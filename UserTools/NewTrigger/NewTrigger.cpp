@@ -21,16 +21,28 @@ bool NewTrigger::Initialise(std::string configfile, DataModel &data){
   InitialiseConfiguration(configfile);
   //m_variables.Print();
 
-  LoadConfig();
   
   m_util=new Utilities();
   args=new NewTrigger_args();
   args->m_data=m_data; 
+  LoadConfig();
+
   m_util->CreateThread("test", &Thread, args);
 
-  if(!m_data->out_data_chunks) m_data->out_data_chunks=new std::map<unsigned int, MPMTCollection*>;
+  
+  if(!m_data->out_data_chunks){
+    m_data->out_data_chunks_mtx.lock();
+    m_data->out_data_chunks=new std::map<unsigned int, MPMTCollection*>;
+    m_data->out_data_chunks_mtx.unlock();
+  }
 
-  m_data->hardware_trigger = true;
+  if(m_data->preadout_windows==0){
+    m_data->preadout_windows_mtx.lock();
+    m_data->preadout_windows=new std::vector<PReadoutWindow*>;
+    m_data->preadout_windows_mtx.unlock();
+  }
+  
+  m_data->hardware_trigger = false;
   ExportConfiguration();
   
   return true;
@@ -43,6 +55,20 @@ bool NewTrigger::Execute(){
     InitialiseConfiguration(m_configfile);
     LoadConfig();
     ExportConfiguration();
+  }
+
+  if(!m_data->running){
+
+    m_data->out_data_chunks_mtx.lock();
+    if(m_data->out_data_chunks->size()){
+      for( std::map<unsigned int, MPMTCollection*>::iterator it=m_data->out_data_chunks->begin(); it!=m_data->out_data_chunks->end(); it++){
+	delete it->second;
+	it->second=0;
+      }
+      m_data->out_data_chunks->clear();
+    }
+    m_data->out_data_chunks_mtx.unlock();
+    
 
   }
     
@@ -54,12 +80,35 @@ bool NewTrigger::Finalise(){
 
   m_util->KillThread(args);
 
+  
   delete args;
   args=0;
 
+  
+
   delete m_util;
   m_util=0;
+  
+  m_data->data_chunks_mtx.lock();
+  
+  for(std::map<unsigned int, MPMTCollection*>::iterator it=m_data->data_chunks.begin(); it != m_data->data_chunks.end(); it++){
+    delete it->second;
+    it->second=0;
+  }
+  m_data->data_chunks.clear();
+  m_data->data_chunks_mtx.unlock();
 
+  m_data->mpmt_messages_mtx.lock();
+  for(unsigned int i=0; i<m_data->mpmt_messages->size(); i++){
+    delete m_data->mpmt_messages->at(i);
+    m_data->mpmt_messages->at(i)=0;
+  }
+
+  delete m_data->mpmt_messages;
+  m_data->mpmt_messages =0;
+  m_data->mpmt_messages_mtx.unlock();
+
+  
   return true;
 }
 
@@ -68,7 +117,7 @@ void NewTrigger::Thread(Thread_args* arg){
 
   
   NewTrigger_args* args=reinterpret_cast<NewTrigger_args*>(arg);
-  if(args->m_data->raw_readout) return;
+  if(args->m_data->raw_readout || !args->m_data->running) return;
   
   std::map<unsigned int, MPMTCollection*> local_data_chunks;
   std::vector<std::map<unsigned int, MPMTCollection*>::iterator > to_remove;
@@ -78,10 +127,19 @@ void NewTrigger::Thread(Thread_args* arg){
   args->m_data->data_chunks_mtx.lock();
   
   for(std::map<unsigned int, MPMTCollection*>::iterator it= args->m_data->data_chunks.begin(); it!= args->m_data->data_chunks.end(); it++){
-    if(it->first < (args->m_data->current_coarse_counter >> 23) + 30){
+    //printf(" first=%u, counter=%u\n",  it->first, ((args->m_data->current_coarse_counter >> 23) + 300));
+    if((args->m_data->current_coarse_counter >> 23) > 170 && it->first < (args->m_data->current_coarse_counter >> 23) - 170){
+      //printf(" processing bin=%u\n", it->first);
       local_data_chunks[it->first] = it->second;
       it->second=0;
       to_remove.push_back(it);
+      
+      if(args->check_time.count(it->first)){
+	args->m_data->services->SendLog("ERROR Acumulation: there is late data to the acumulator" , v_error);
+	args->m_data->services->SendAlarm("ERROR Acumulation: there is late data to the acumulator" , v_error);
+      }
+      args->check_time[it->first]=true;
+      if(args->check_time.size() > 200) args->check_time.clear();
     }
   }
   
@@ -100,16 +158,18 @@ void NewTrigger::Thread(Thread_args* arg){
   ///////////////////// finnished getting data //////////////////////
   
   if(local_data_chunks.size() == 0){
+    //printf("d1\n");
     usleep(100);
     return;
   }
 
-  if(true){
-    //  if(args->m_data->hardware_trigger){
-    
+  if(!args->m_data->nhits_trigger){
+
+    //      printf("d2\n");
     /// put into buffer
     args->m_data->out_data_chunks_mtx.lock();
     for(std::map<unsigned int, MPMTCollection*>::iterator it= local_data_chunks.begin(); it!= local_data_chunks.end(); it++){
+      //  printf("d3\n");
       /*
       bool has_data =false;
       for(unsigned int i=0; i<  it->second->mpmt_output.size(); i++){
@@ -123,17 +183,24 @@ void NewTrigger::Thread(Thread_args* arg){
       
       if(args->m_data->out_data_chunks->count(it->first)){
 	//send log
-	printf("there is late data\n");
+	//	args->m_data->services->SendLog("warning Acumulation: there is late data to the acumulator" , v_error);
 	(*args->m_data->out_data_chunks)[it->first]->mpmt_output.insert((*args->m_data->out_data_chunks)[it->first]->mpmt_output.end(), it->second->mpmt_output.begin(), it->second->mpmt_output.end());
 	(*args->m_data->out_data_chunks)[it->first]->triggers_info.insert((*args->m_data->out_data_chunks)[it->first]->triggers_info.end(), it->second->triggers_info.begin(), it->second->triggers_info.end());
 	(*args->m_data->out_data_chunks)[it->first]->triggers.insert((*args->m_data->out_data_chunks)[it->first]->triggers.end(), it->second->triggers.begin(), it->second->triggers.end());
+
+	it->second->mpmt_output.clear();
+	it->second->triggers_info.clear();
+	it->second->triggers.clear();
+	delete it->second;
+	it->second=0;
 	
       }
       else{
 	(*args->m_data->out_data_chunks)[it->first]=it->second;
 	it->second=0;
       }
-      /*
+
+      /*      
       delete (*args->m_data->out_data_chunks)[it->first];
       (*args->m_data->out_data_chunks)[it->first]=0;
       (*args->m_data->out_data_chunks).erase(it->first);
@@ -143,8 +210,7 @@ void NewTrigger::Thread(Thread_args* arg){
     args->m_data->out_data_chunks_mtx.unlock();
   }
 
-  if(false){
-    //  if(!args->m_data->hardware_trigger){
+  if(args->m_data->nhits_trigger){
        
     //do nhits
 
@@ -156,17 +222,28 @@ void NewTrigger::Thread(Thread_args* arg){
       tmp_args->m_data = args->m_data;
       tmp_args->bin = it->first;
       tmp_args->mpmt_collection = it->second;
-      tmp_args->window_size = 100;
-      tmp_args->threashold = 100;
-
+      tmp_args->nhits_window_size = args->nhits_window_size;
+      tmp_args->nhits_threshold =  args->nhits_threshold;
+      tmp_args->nhits_jump =  args->nhits_jump;
+      tmp_args->nhits_bit_shift =  args->nhits_bit_shift;
+      
       it->second=0;
       //printf("d5 size=%d\n",args->triggers.size());
       
       tmp_job->func=NhitsJob;
       tmp_job->data=tmp_args;
       //printf("d6.2 pointerin=%p\n", tmp_args);
-      args->m_data->job_queue.AddJob(tmp_job);
-      
+      if(args->m_data->running) args->m_data->job_queue.AddJob(tmp_job);
+      else {
+	delete tmp_args->mpmt_collection;
+	tmp_args->mpmt_collection=0;
+	
+	delete tmp_args;
+	tmp_args=0;
+
+	delete tmp_job;
+	tmp_job=0;
+      }
       
     }
 
@@ -227,11 +304,20 @@ void NewTrigger::LoadConfig(){
   bool main=false;
   bool led=false;
   if(!m_variables.Get("verbose",m_verbose)) m_verbose=1;
-  m_variables.Get("main", main);
-  m_variables.Get("led", led);
+  if(!m_variables.Get("led_trigger", m_data->led_trigger)) m_data->led_trigger=false;
+  if(!m_variables.Get("nhits_trigger", m_data->nhits_trigger)) m_data->nhits_trigger=false;
+  if(!m_variables.Get("raw_readout", m_data->raw_readout)) m_data->raw_readout=false;
+  if(!m_variables.Get("hardware_trigger", m_data->hardware_trigger)) m_data->hardware_trigger=false;
+  if(!m_variables.Get("software_trigger", m_data->software_trigger)) m_data->software_trigger=false;
+  printf("hardware_trigger=%u\n", m_data->hardware_trigger);
+  
+  if(!m_variables.Get("nhits_threshold", args->nhits_threshold)) args->nhits_threshold=20;
+  if(!m_variables.Get("nhits_jump", args->nhits_jump)) args->nhits_jump=25;
+  if(!m_variables.Get("nhits_windos_sizs", args->nhits_window_size)) args->nhits_window_size=25;
+  if(!m_variables.Get("nhits_bit_shift", args->nhits_bit_shift)) args->nhits_bit_shift=15;
   //bool Laser=false;
   //bool none=false;
-  //bool Beam=false;
+ 
   //bool Beam=false;
   //bool Beam=false;
   //bool Beam=false;
@@ -258,7 +344,8 @@ bool NewTrigger::NhitsJob(void* data){
 
  //printf("d1\n");
  // unsigned short* hit_sum = new unsigned short[8388608];
- unsigned short* hit_sum = new unsigned short[131072];
+ unsigned int bins = pow(2,32 - args->nhits_bit_shift) -1;
+ unsigned short* hit_sum = new unsigned short[bins+1];
  *hit_sum = { 0 };
  //printf("d2\n");
  
@@ -267,21 +354,21 @@ bool NewTrigger::NhitsJob(void* data){
 
      //     hit_sum[args->mpmt_collection->mpmt_output.at(i)->hits.at(j).hit->GetCoarseCounter() - (args->bin <<23)]++;
 
-     hit_sum[args->mpmt_collection->mpmt_output.at(i)->hits.at(j).hit->GetCoarseCounter() >>15 ];
+     hit_sum[((args->m_data->time_corrections[args->mpmt_collection->mpmt_output.at(i)->hits.at(j).card_id]) + args->mpmt_collection->mpmt_output.at(i)->hits.at(j).hit->GetCoarseCounter()) >> args->nhits_bit_shift ];
    }
  }
  //printf("d3\n");
- for (unsigned int i= 1 ; i <131071; i++){
+ for (unsigned int i= 1 ; i <bins; i++){
    hit_sum[i]+= hit_sum[i-1];
  }
   //printf("d4\n");
- for (unsigned int i= args->window_size; i<131071; i++){
-   if(hit_sum[i]-hit_sum[i-args->window_size] > args->threashold){
+ for (unsigned int i= args->nhits_window_size; i<bins; i++){
+   if(hit_sum[i]-hit_sum[i-args->nhits_window_size] > args->nhits_threshold){
      TriggerInfo* tmp = new TriggerInfo;
      tmp->type= TriggerType::NHITS;
      tmp->time= i + (args->bin <<7);
      args->mpmt_collection->triggers_info.push_back(tmp);
-     i+=args->window_size;
+     i+=args->nhits_jump;
    }
 
  }
@@ -292,7 +379,7 @@ bool NewTrigger::NhitsJob(void* data){
  if(args->m_data->out_data_chunks->count(args->bin)){
    //send log
    printf("there is late data from nhits\n");
-   /* (*args->m_data->out_data_chunks)[args->bin]->mpmt_output.insert((*args->m_data->out_data_chunks)[args->bin]->mpmt_output.end(), it->second->mpmt_output.begin(), it->second->mpmt_output.end());
+   /*   (*args->m_data->out_data_chunks)[args->bin]->mpmt_output.insert((*args->m_data->out_data_chunks)[args->bin]->mpmt_output.end(), it->second->mpmt_output.begin(), it->second->mpmt_output.end());
    (*args->m_data->out_data_chunks)[args->bin]->triggers_info.insert((*args->m_data->out_data_chunks)[args->bin]->triggers_info.end(), it->second->triggers_info.begin(), it->second->triggers_info.end());
    (*args->m_data->out_data_chunks)[args->bin]->triggers.insert((*args->m_data->out_data_chunks)[args->bin]->triggers.end(), it->second->triggers.begin(), it->second->triggers.end());
    */

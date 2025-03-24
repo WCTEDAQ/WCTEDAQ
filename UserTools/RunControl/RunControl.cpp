@@ -35,11 +35,33 @@ bool RunControl::Initialise(std::string configfile, DataModel &data){
   m_data->run_number=0;
   m_data->sub_run_number=0;
   m_data->readout_num=0;
+  m_data->spill_num=0;
+  m_data->vme_event_num=0;
+  m_data->beam_active=false;
+  m_data->beam_stopping=false;
+  m_data->raw_readout=false;
+  m_data->hardware_trigger=false;
+  m_data->nhits_trigger=false;
+  m_data->led_trigger=false;
+  //m_data->laser_trigger=false;
+  m_data->software_trigger=false;
+  
   //printf("d5\n");
   
   args->start_time=&m_data->start_time;
   args->current_coarse_counter=&m_data->current_coarse_counter;
+  args->spill_update_coarse_counter=&m_data->spill_update_coarse_counter;
+  args->spill_update_flag=&m_data->spill_update_flag;
+  args->spill_num=&m_data->spill_num;  
+  args->spill_update_flag_mtx=&m_data->spill_update_flag_mtx;
   //printf("d6\n");
+
+  m_data->current_coarse_counter =0;
+  m_data->spill_num=0;
+  m_data->spill_update_flag=false;
+	
+
+  *m_start_time= boost::posix_time::microsec_clock::universal_time() +  boost::posix_time::minutes(600); ///now+1min
   
   // FIXME better name than 'test'
   m_util->CreateThread("test", &Thread, args);
@@ -57,6 +79,7 @@ bool RunControl::Initialise(std::string configfile, DataModel &data){
   //printf("d7.5\n");
   m_data->sc_vars["SubRunStart"]->SetValue(0);
   //printf("d8\n");
+
   
   m_data->running=false;
   
@@ -80,14 +103,16 @@ bool RunControl::Execute(){
   if(m_data->sub_run) m_data->sub_run=false;
 
   if(m_stopping){
-
-    m_data->readout_windows_mtx.lock();
-    if(m_data->readout_windows->size()==0){
+    m_data->running=false;
+    //printf("stopping\n");
+    m_data->preadout_windows_mtx.lock();
+    if(m_data->preadout_windows->size()==0){
       m_data->vars.Set("Runinfo", "Run Stopped");
       m_data->vars.Set("Status", "Run Stopped");
       m_stopping=false;
     }
-    m_data->readout_windows_mtx.unlock();
+    m_data->preadout_windows_mtx.unlock();
+    //printf("stopping2\n");
   }
   
   if(m_run_start){
@@ -95,19 +120,24 @@ bool RunControl::Execute(){
     try{
 	    m_lapse = m_period_reconfigure -( boost::posix_time::microsec_clock::universal_time() - (m_config_start));
            //std::cout<< m_lapse<<std::endl;
-
+	  m_data->current_coarse_counter =0;
+	  m_data->spill_num=0;
+	  m_data->spill_update_flag=false;
+	  
 	    if(m_lapse.is_negative() && !m_data->change_config){
               //printf("in runstart lapse\n");
 	      
 	      *m_start_time= boost::posix_time::microsec_clock::universal_time() +  boost::posix_time::minutes(1); ///now+1min
 	      unsigned long secs_since_epoch= boost::posix_time::time_duration(*m_start_time -  boost::posix_time::time_from_string("1970-01-01 00:00:00.000")).total_seconds();
-	      
+	      m_data->current_coarse_counter =0;
+		
 	      std::string json_payload="{\"Timestamp\":" + std::to_string(secs_since_epoch) + "}";
+	      //	      comented out for fake data
 	      bool ok = m_data->sc_vars.AlertSend("RunStart",json_payload);
 	      if(!ok){
 	        std::string errmsg = "ERROR "+m_tool_name+"::Execute failed to send RunStart alert with payload '"+json_payload+"'";
 	        throw std::runtime_error(errmsg);
-	      }
+		}
 	      std::cout<<"Sent Alert that new run will start at "<<*m_start_time<<std::endl;
 	      m_data->running=true;
 	      
@@ -137,10 +167,12 @@ bool RunControl::Execute(){
 	      // update DB start time;
 	      // m_data->start_time= *m_start_time;
 	      m_data->spill_num=0;
+	      m_data->vme_event_num=0;
+	      m_data->readout_num=0;
+	      
 	      m_data->beam_active=false;
 	      m_data->beam_stopping=false;
 	      
-	      m_data->readout_num=0;  
 	      m_data->run_start=true;
 	      m_run_start=false;
               
@@ -162,8 +194,8 @@ bool RunControl::Execute(){
   }
   
   if(m_run_stop){
-    m_data->vars.Set("Runinfo","Run Stopped");
-    m_data->vars.Set("Status", "Run Stopped");
+    m_data->vars.Set("Runinfo","Run Stopping");
+    m_data->vars.Set("Status", "Run Stopping");
     m_data->run_stop=true;
     m_run_stop=false;
   }
@@ -176,6 +208,10 @@ bool RunControl::Execute(){
     m_data->sub_run=true;
     m_new_sub_run=false;
     m_data->readout_num=0;
+    m_data->spill_num=0;
+    m_data->vme_event_num=0;
+    m_data->readout_num=0;
+    
   }
   
   m_lapse = m_period_new_sub_run -( boost::posix_time::microsec_clock::universal_time() - (*m_start_time));
@@ -198,17 +234,34 @@ bool RunControl::Finalise(){
 
   m_start_time=0;
 
+  m_data->readout_windows=0;
+  delete m_data->readout_windows;
+    
   return true;
 }
 
 void RunControl::Thread(Thread_args* arg){
   
   RunControl_args* args=reinterpret_cast<RunControl_args*>(arg);
-  
+  //printf("spill_num=%lu\n", *(args->spill_num));
+  //  printf("cc=%lu\n", *(args->current_coarse_counter));
   boost::posix_time::time_duration td = (boost::posix_time::microsec_clock::universal_time() - *(args->start_time));
-
-  *(args->current_coarse_counter)=td.total_milliseconds()*125000; // gives the current time in 8ns
-
+  if(td.is_negative()) *(args->current_coarse_counter)=0;
+  else{
+    *(args->current_coarse_counter)=td.total_milliseconds()*125000; // gives the current time in 8ns
+    args->spill_update_flag_mtx->lock();
+    if(*(args->spill_update_flag)){
+      if( *(args->current_coarse_counter) > *(args->spill_update_coarse_counter) ){
+     	*(args->spill_update_flag)=false;
+	//	printf("spill_num before =%lu, p=%p, b=%d, \n", *(args->spill_num), args->spill_num, *(args->spill_update_flag));
+	*(args->spill_num)= *(args->spill_num) + 1;
+	//	printf("spill_num before =%lu, p=%p, b=%d, \n", *(args->spill_num), args->spill_num, *(args->spill_update_flag));
+	printf("spill_num=%lu\n", *(args->spill_num));
+      }
+    }
+    args->spill_update_flag_mtx->unlock();
+    
+  }
   usleep(1000);
   
 }
@@ -223,8 +276,12 @@ std::string RunControl::RunStart(const char* key){
     m_data->sc_vars["RunStart"]->SetValue("command");
     return "Error: Already Starting new run";
   }
-  if(m_data->running) RunStop("");
-  printf("hello : %s\n", key);
+  if(m_data->running){
+    m_data->sc_vars["RunStart"]->SetValue("command");
+    return "Error: Already running";
+  }
+  //    RunStop("");
+  // printf("hello : %s\n", key);
   
   std::string run_json="";
   m_data->sc_vars["RunStart"]->GetValue(run_json);
@@ -242,7 +299,8 @@ std::string RunControl::RunStart(const char* key){
   
   // send alert to inform other systems to update their configurations
   std::string json_payload="{\"RunConfig\":" + std::to_string(m_data->run_configuration) + "}";
-  bool ok = m_data->sc_vars.AlertSend("ChangeConfig", json_payload);
+  // /*  commented out for fake data   
+bool ok = m_data->sc_vars.AlertSend("ChangeConfig", json_payload);
   if(!ok){
     std::string errmsg = "ERROR "+m_tool_name+"::RunStart failed to send ChangeConfig alert with payload '"+json_payload+"'";
     m_data->services->SendLog(errmsg, v_error);
@@ -265,6 +323,7 @@ std::string RunControl::RunStop(const char* key){
 
   if(!m_data->running) return "ERROR: Detector not running";
   if(*key!='N'){
+    ///* commented out for fake data
     bool ok = m_data->sc_vars.AlertSend("RunStop");
     if(!ok){
       std::string errmsg = "ERROR "+m_tool_name+"::RunStop failed to send RunStop alert";
@@ -272,7 +331,8 @@ std::string RunControl::RunStop(const char* key){
       m_data->services->SendAlarm(errmsg);
       return errmsg;
     }
-    m_data->running=false;
+   
+    //    m_data->running=false;
     m_run_stop=true;
   }
   

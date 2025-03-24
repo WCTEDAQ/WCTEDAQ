@@ -38,7 +38,9 @@ void VMEReadout<Hit>::push(Iterator begin, Iterator end) {
 template <typename Hit>
 std::deque<std::vector<Hit>> VMEReadout<Hit>::get() {
   std::lock_guard<std::mutex> lock(mutex);
-  return std::move(readout);
+  auto result = std::move(readout);
+  readout.clear();
+  return result;
 };
 
 template <typename Hit>

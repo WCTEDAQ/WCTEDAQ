@@ -78,6 +78,7 @@ class NewWindowBuilder: public Tool {
   void LoadConfig();
   static void Thread(Thread_args* arg); ///< Function to be run by the thread in a loop. Make sure not to block in it
   static bool BuildWindow(void* data); 
+  static bool BuildWindow2(void* data); 
   Utilities* m_util;  ///< Pointer to utilities class to help with threading
   NewWindowBuilder_args* args; ///< thread args (also holds pointer to the thread)
   std::string m_configfile;

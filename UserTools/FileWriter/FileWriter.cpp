@@ -108,7 +108,6 @@ void FileWriter::Thread(Thread_args* arg){
   WCTERawData tmp;
   
   tmp.readout_windows.reserve(readout_windows->size());
-  //printf("readout_windows->size()=%u\n",readout_windows->size());  
   for(unsigned int i=0; i<readout_windows->size(); i++){
     if((readout_windows->at(i))->triggers_info->size() ==0)printf("error 1 in file\n");
     //printf("d1\n");
@@ -119,19 +118,27 @@ void FileWriter::Thread(Thread_args* arg){
 
 
   //  tmp.Print();
-  
+  printf("readout_windows->size()=%u\n",readout_windows->size());
+  boost::posix_time::ptime start;
+  boost::posix_time::ptime stop;
+
+  start = boost::posix_time::microsec_clock::universal_time(); 
+
   output<<tmp;
 
-  
+   output.Bclose();
 
-  //printf("d1\n");
+   stop = boost::posix_time::microsec_clock::universal_time();
+
+   unsigned long secs= boost::posix_time::time_duration(stop - start).total_seconds();            
+   printf("d1 secs=%lu\n", secs);
   
   delete readout_windows;
   //printf("d2\n");
   readout_windows=0;
   
   //printf("d3\n");
-  output.Bclose();
+  //  output.Bclose();
   //printf("d4\n");
   (*args->part_number)++;
 
@@ -143,7 +150,7 @@ void FileWriter::LoadConfig(){ // change to bool have a return type
 
   
   if(!m_variables.Get("verbose",m_verbose)) m_verbose=1;
-  if(!m_variables.Get("file_path",m_file_name)) m_file_name="./data";
+  if(!m_variables.Get("file_path",m_file_name)) m_file_name="/mnt/nfs/WebServer/html-Detector/Data/data";
   //if(!m_variables.Get("file_writeout_period",m_file_writeout_period)) m_file_writeout_period=300;
   m_file_writeout_period=60;
   

@@ -37,7 +37,11 @@
 // Header files passed as explicit arguments
 #include "/root/WCTEDAQ/DataModel/DAQInfo.h"
 #include "/root/WCTEDAQ/DataModel/ReadoutWindow.h"
+#include "/root/WCTEDAQ/DataModel/WCTEMPMTPPS.h"
+#include "/root/WCTEDAQ/DataModel/TDCHit.h"
+#include "/root/WCTEDAQ/DataModel/QDCHit.h"
 #include "/root/WCTEDAQ/DataModel/MPMTMessages.h"
+#include "/root/WCTEDAQ/DataModel/MPMTMessageData.h"
 #include "/root/WCTEDAQ/DataModel/MPMTWaveformSamples.h"
 #include "/root/WCTEDAQ/DataModel/TriggerType.h"
 #include "SerialisableObject.h"
@@ -47,6 +51,11 @@
 #include "ReadoutWindow.h"
 #include "MPMTMessages.h"
 #include "MPMTWaveformSamples.h"
+#include "MPMTMessageData.h"
+#include "WCTEMPMTPPS.h"
+#include "TDCHit.h"
+#include "QDCHit.h"
+#include "BitFunctions.h"
 
 // Header files passed via #pragma extra_include
 
@@ -90,6 +99,51 @@ namespace ROOT {
    }
 
    static void SerialisableObject_TClassManip(TClass* ){
+   }
+
+} // end of namespace ROOT
+
+namespace ROOT {
+   static TClass *WCTEMPMTPPS_Dictionary();
+   static void WCTEMPMTPPS_TClassManip(TClass*);
+   static void *new_WCTEMPMTPPS(void *p = 0);
+   static void *newArray_WCTEMPMTPPS(Long_t size, void *p);
+   static void delete_WCTEMPMTPPS(void *p);
+   static void deleteArray_WCTEMPMTPPS(void *p);
+   static void destruct_WCTEMPMTPPS(void *p);
+
+   // Function generating the singleton type initializer
+   static TGenericClassInfo *GenerateInitInstanceLocal(const ::WCTEMPMTPPS*)
+   {
+      ::WCTEMPMTPPS *ptr = 0;
+      static ::TVirtualIsAProxy* isa_proxy = new ::TIsAProxy(typeid(::WCTEMPMTPPS));
+      static ::ROOT::TGenericClassInfo 
+         instance("WCTEMPMTPPS", "WCTEMPMTPPS.h", 10,
+                  typeid(::WCTEMPMTPPS), ::ROOT::Internal::DefineBehavior(ptr, ptr),
+                  &WCTEMPMTPPS_Dictionary, isa_proxy, 4,
+                  sizeof(::WCTEMPMTPPS) );
+      instance.SetNew(&new_WCTEMPMTPPS);
+      instance.SetNewArray(&newArray_WCTEMPMTPPS);
+      instance.SetDelete(&delete_WCTEMPMTPPS);
+      instance.SetDeleteArray(&deleteArray_WCTEMPMTPPS);
+      instance.SetDestructor(&destruct_WCTEMPMTPPS);
+      return &instance;
+   }
+   TGenericClassInfo *GenerateInitInstance(const ::WCTEMPMTPPS*)
+   {
+      return GenerateInitInstanceLocal((::WCTEMPMTPPS*)0);
+   }
+   // Static variable to force the class initialization
+   static ::ROOT::TGenericClassInfo *_R__UNIQUE_DICT_(Init) = GenerateInitInstanceLocal((const ::WCTEMPMTPPS*)0x0); R__UseDummy(_R__UNIQUE_DICT_(Init));
+
+   // Dictionary for non-ClassDef classes
+   static TClass *WCTEMPMTPPS_Dictionary() {
+      TClass* theClass =::ROOT::GenerateInitInstanceLocal((const ::WCTEMPMTPPS*)0x0)->GetClass();
+      WCTEMPMTPPS_TClassManip(theClass);
+   return theClass;
+   }
+
+   static void WCTEMPMTPPS_TClassManip(TClass* ){
    }
 
 } // end of namespace ROOT
@@ -275,6 +329,96 @@ namespace ROOT {
 } // end of namespace ROOT
 
 namespace ROOT {
+   static TClass *TDCHit_Dictionary();
+   static void TDCHit_TClassManip(TClass*);
+   static void *new_TDCHit(void *p = 0);
+   static void *newArray_TDCHit(Long_t size, void *p);
+   static void delete_TDCHit(void *p);
+   static void deleteArray_TDCHit(void *p);
+   static void destruct_TDCHit(void *p);
+
+   // Function generating the singleton type initializer
+   static TGenericClassInfo *GenerateInitInstanceLocal(const ::TDCHit*)
+   {
+      ::TDCHit *ptr = 0;
+      static ::TVirtualIsAProxy* isa_proxy = new ::TIsAProxy(typeid(::TDCHit));
+      static ::ROOT::TGenericClassInfo 
+         instance("TDCHit", "TDCHit.h", 45,
+                  typeid(::TDCHit), ::ROOT::Internal::DefineBehavior(ptr, ptr),
+                  &TDCHit_Dictionary, isa_proxy, 4,
+                  sizeof(::TDCHit) );
+      instance.SetNew(&new_TDCHit);
+      instance.SetNewArray(&newArray_TDCHit);
+      instance.SetDelete(&delete_TDCHit);
+      instance.SetDeleteArray(&deleteArray_TDCHit);
+      instance.SetDestructor(&destruct_TDCHit);
+      return &instance;
+   }
+   TGenericClassInfo *GenerateInitInstance(const ::TDCHit*)
+   {
+      return GenerateInitInstanceLocal((::TDCHit*)0);
+   }
+   // Static variable to force the class initialization
+   static ::ROOT::TGenericClassInfo *_R__UNIQUE_DICT_(Init) = GenerateInitInstanceLocal((const ::TDCHit*)0x0); R__UseDummy(_R__UNIQUE_DICT_(Init));
+
+   // Dictionary for non-ClassDef classes
+   static TClass *TDCHit_Dictionary() {
+      TClass* theClass =::ROOT::GenerateInitInstanceLocal((const ::TDCHit*)0x0)->GetClass();
+      TDCHit_TClassManip(theClass);
+   return theClass;
+   }
+
+   static void TDCHit_TClassManip(TClass* ){
+   }
+
+} // end of namespace ROOT
+
+namespace ROOT {
+   static TClass *QDCHit_Dictionary();
+   static void QDCHit_TClassManip(TClass*);
+   static void *new_QDCHit(void *p = 0);
+   static void *newArray_QDCHit(Long_t size, void *p);
+   static void delete_QDCHit(void *p);
+   static void deleteArray_QDCHit(void *p);
+   static void destruct_QDCHit(void *p);
+
+   // Function generating the singleton type initializer
+   static TGenericClassInfo *GenerateInitInstanceLocal(const ::QDCHit*)
+   {
+      ::QDCHit *ptr = 0;
+      static ::TVirtualIsAProxy* isa_proxy = new ::TIsAProxy(typeid(::QDCHit));
+      static ::ROOT::TGenericClassInfo 
+         instance("QDCHit", "QDCHit.h", 38,
+                  typeid(::QDCHit), ::ROOT::Internal::DefineBehavior(ptr, ptr),
+                  &QDCHit_Dictionary, isa_proxy, 4,
+                  sizeof(::QDCHit) );
+      instance.SetNew(&new_QDCHit);
+      instance.SetNewArray(&newArray_QDCHit);
+      instance.SetDelete(&delete_QDCHit);
+      instance.SetDeleteArray(&deleteArray_QDCHit);
+      instance.SetDestructor(&destruct_QDCHit);
+      return &instance;
+   }
+   TGenericClassInfo *GenerateInitInstance(const ::QDCHit*)
+   {
+      return GenerateInitInstanceLocal((::QDCHit*)0);
+   }
+   // Static variable to force the class initialization
+   static ::ROOT::TGenericClassInfo *_R__UNIQUE_DICT_(Init) = GenerateInitInstanceLocal((const ::QDCHit*)0x0); R__UseDummy(_R__UNIQUE_DICT_(Init));
+
+   // Dictionary for non-ClassDef classes
+   static TClass *QDCHit_Dictionary() {
+      TClass* theClass =::ROOT::GenerateInitInstanceLocal((const ::QDCHit*)0x0)->GetClass();
+      QDCHit_TClassManip(theClass);
+   return theClass;
+   }
+
+   static void QDCHit_TClassManip(TClass* ){
+   }
+
+} // end of namespace ROOT
+
+namespace ROOT {
    static TClass *MPMTWaveformHeader_Dictionary();
    static void MPMTWaveformHeader_TClassManip(TClass*);
    static void *new_MPMTWaveformHeader(void *p = 0);
@@ -289,7 +433,7 @@ namespace ROOT {
       ::MPMTWaveformHeader *ptr = 0;
       static ::TVirtualIsAProxy* isa_proxy = new ::TIsAProxy(typeid(::MPMTWaveformHeader));
       static ::ROOT::TGenericClassInfo 
-         instance("MPMTWaveformHeader", "MPMTMessages.h", 17,
+         instance("MPMTWaveformHeader", "MPMTMessages.h", 18,
                   typeid(::MPMTWaveformHeader), ::ROOT::Internal::DefineBehavior(ptr, ptr),
                   &MPMTWaveformHeader_Dictionary, isa_proxy, 4,
                   sizeof(::MPMTWaveformHeader) );
@@ -334,7 +478,7 @@ namespace ROOT {
       ::P_MPMTWaveformHeader *ptr = 0;
       static ::TVirtualIsAProxy* isa_proxy = new ::TIsAProxy(typeid(::P_MPMTWaveformHeader));
       static ::ROOT::TGenericClassInfo 
-         instance("P_MPMTWaveformHeader", "MPMTMessages.h", 77,
+         instance("P_MPMTWaveformHeader", "MPMTMessages.h", 78,
                   typeid(::P_MPMTWaveformHeader), ::ROOT::Internal::DefineBehavior(ptr, ptr),
                   &P_MPMTWaveformHeader_Dictionary, isa_proxy, 4,
                   sizeof(::P_MPMTWaveformHeader) );
@@ -379,7 +523,7 @@ namespace ROOT {
       ::MPMTHit *ptr = 0;
       static ::TVirtualIsAProxy* isa_proxy = new ::TIsAProxy(typeid(::MPMTHit));
       static ::ROOT::TGenericClassInfo 
-         instance("MPMTHit", "MPMTMessages.h", 124,
+         instance("MPMTHit", "MPMTMessages.h", 126,
                   typeid(::MPMTHit), ::ROOT::Internal::DefineBehavior(ptr, ptr),
                   &MPMTHit_Dictionary, isa_proxy, 4,
                   sizeof(::MPMTHit) );
@@ -424,7 +568,7 @@ namespace ROOT {
       ::P_MPMTHit *ptr = 0;
       static ::TVirtualIsAProxy* isa_proxy = new ::TIsAProxy(typeid(::P_MPMTHit));
       static ::ROOT::TGenericClassInfo 
-         instance("P_MPMTHit", "MPMTMessages.h", 175,
+         instance("P_MPMTHit", "MPMTMessages.h", 177,
                   typeid(::P_MPMTHit), ::ROOT::Internal::DefineBehavior(ptr, ptr),
                   &P_MPMTHit_Dictionary, isa_proxy, 4,
                   sizeof(::P_MPMTHit) );
@@ -469,7 +613,7 @@ namespace ROOT {
       ::PReadoutWindow *ptr = 0;
       static ::TVirtualIsAProxy* isa_proxy = new ::TIsAProxy(typeid(::PReadoutWindow));
       static ::ROOT::TGenericClassInfo 
-         instance("PReadoutWindow", "ReadoutWindow.h", 79,
+         instance("PReadoutWindow", "ReadoutWindow.h", 82,
                   typeid(::PReadoutWindow), ::ROOT::Internal::DefineBehavior(ptr, ptr),
                   &PReadoutWindow_Dictionary, isa_proxy, 4,
                   sizeof(::PReadoutWindow) );
@@ -545,6 +689,51 @@ namespace ROOT {
 } // end of namespace ROOT
 
 namespace ROOT {
+   static TClass *MPMTMessageData_Dictionary();
+   static void MPMTMessageData_TClassManip(TClass*);
+   static void *new_MPMTMessageData(void *p = 0);
+   static void *newArray_MPMTMessageData(Long_t size, void *p);
+   static void delete_MPMTMessageData(void *p);
+   static void deleteArray_MPMTMessageData(void *p);
+   static void destruct_MPMTMessageData(void *p);
+
+   // Function generating the singleton type initializer
+   static TGenericClassInfo *GenerateInitInstanceLocal(const ::MPMTMessageData*)
+   {
+      ::MPMTMessageData *ptr = 0;
+      static ::TVirtualIsAProxy* isa_proxy = new ::TIsAProxy(typeid(::MPMTMessageData));
+      static ::ROOT::TGenericClassInfo 
+         instance("MPMTMessageData", "MPMTMessageData.h", 5,
+                  typeid(::MPMTMessageData), ::ROOT::Internal::DefineBehavior(ptr, ptr),
+                  &MPMTMessageData_Dictionary, isa_proxy, 4,
+                  sizeof(::MPMTMessageData) );
+      instance.SetNew(&new_MPMTMessageData);
+      instance.SetNewArray(&newArray_MPMTMessageData);
+      instance.SetDelete(&delete_MPMTMessageData);
+      instance.SetDeleteArray(&deleteArray_MPMTMessageData);
+      instance.SetDestructor(&destruct_MPMTMessageData);
+      return &instance;
+   }
+   TGenericClassInfo *GenerateInitInstance(const ::MPMTMessageData*)
+   {
+      return GenerateInitInstanceLocal((::MPMTMessageData*)0);
+   }
+   // Static variable to force the class initialization
+   static ::ROOT::TGenericClassInfo *_R__UNIQUE_DICT_(Init) = GenerateInitInstanceLocal((const ::MPMTMessageData*)0x0); R__UseDummy(_R__UNIQUE_DICT_(Init));
+
+   // Dictionary for non-ClassDef classes
+   static TClass *MPMTMessageData_Dictionary() {
+      TClass* theClass =::ROOT::GenerateInitInstanceLocal((const ::MPMTMessageData*)0x0)->GetClass();
+      MPMTMessageData_TClassManip(theClass);
+   return theClass;
+   }
+
+   static void MPMTMessageData_TClassManip(TClass* ){
+   }
+
+} // end of namespace ROOT
+
+namespace ROOT {
    // Wrapper around operator delete
    static void delete_SerialisableObject(void *p) {
       delete ((::SerialisableObject*)p);
@@ -557,6 +746,27 @@ namespace ROOT {
       ((current_t*)p)->~current_t();
    }
 } // end of namespace ROOT for class ::SerialisableObject
+
+namespace ROOT {
+   // Wrappers around operator new
+   static void *new_WCTEMPMTPPS(void *p) {
+      return  p ? new(p) ::WCTEMPMTPPS : new ::WCTEMPMTPPS;
+   }
+   static void *newArray_WCTEMPMTPPS(Long_t nElements, void *p) {
+      return p ? new(p) ::WCTEMPMTPPS[nElements] : new ::WCTEMPMTPPS[nElements];
+   }
+   // Wrapper around operator delete
+   static void delete_WCTEMPMTPPS(void *p) {
+      delete ((::WCTEMPMTPPS*)p);
+   }
+   static void deleteArray_WCTEMPMTPPS(void *p) {
+      delete [] ((::WCTEMPMTPPS*)p);
+   }
+   static void destruct_WCTEMPMTPPS(void *p) {
+      typedef ::WCTEMPMTPPS current_t;
+      ((current_t*)p)->~current_t();
+   }
+} // end of namespace ROOT for class ::WCTEMPMTPPS
 
 namespace ROOT {
    // Wrappers around operator new
@@ -641,6 +851,48 @@ namespace ROOT {
       ((current_t*)p)->~current_t();
    }
 } // end of namespace ROOT for class ::DAQInfo
+
+namespace ROOT {
+   // Wrappers around operator new
+   static void *new_TDCHit(void *p) {
+      return  p ? new(p) ::TDCHit : new ::TDCHit;
+   }
+   static void *newArray_TDCHit(Long_t nElements, void *p) {
+      return p ? new(p) ::TDCHit[nElements] : new ::TDCHit[nElements];
+   }
+   // Wrapper around operator delete
+   static void delete_TDCHit(void *p) {
+      delete ((::TDCHit*)p);
+   }
+   static void deleteArray_TDCHit(void *p) {
+      delete [] ((::TDCHit*)p);
+   }
+   static void destruct_TDCHit(void *p) {
+      typedef ::TDCHit current_t;
+      ((current_t*)p)->~current_t();
+   }
+} // end of namespace ROOT for class ::TDCHit
+
+namespace ROOT {
+   // Wrappers around operator new
+   static void *new_QDCHit(void *p) {
+      return  p ? new(p) ::QDCHit : new ::QDCHit;
+   }
+   static void *newArray_QDCHit(Long_t nElements, void *p) {
+      return p ? new(p) ::QDCHit[nElements] : new ::QDCHit[nElements];
+   }
+   // Wrapper around operator delete
+   static void delete_QDCHit(void *p) {
+      delete ((::QDCHit*)p);
+   }
+   static void deleteArray_QDCHit(void *p) {
+      delete [] ((::QDCHit*)p);
+   }
+   static void destruct_QDCHit(void *p) {
+      typedef ::QDCHit current_t;
+      ((current_t*)p)->~current_t();
+   }
+} // end of namespace ROOT for class ::QDCHit
 
 namespace ROOT {
    // Wrappers around operator new
@@ -767,6 +1019,27 @@ namespace ROOT {
       ((current_t*)p)->~current_t();
    }
 } // end of namespace ROOT for class ::MPMTWaveformSamples
+
+namespace ROOT {
+   // Wrappers around operator new
+   static void *new_MPMTMessageData(void *p) {
+      return  p ? new(p) ::MPMTMessageData : new ::MPMTMessageData;
+   }
+   static void *newArray_MPMTMessageData(Long_t nElements, void *p) {
+      return p ? new(p) ::MPMTMessageData[nElements] : new ::MPMTMessageData[nElements];
+   }
+   // Wrapper around operator delete
+   static void delete_MPMTMessageData(void *p) {
+      delete ((::MPMTMessageData*)p);
+   }
+   static void deleteArray_MPMTMessageData(void *p) {
+      delete [] ((::MPMTMessageData*)p);
+   }
+   static void destruct_MPMTMessageData(void *p) {
+      typedef ::MPMTMessageData current_t;
+      ((current_t*)p)->~current_t();
+   }
+} // end of namespace ROOT for class ::MPMTMessageData
 
 namespace ROOT {
    static TClass *vectorlETriggerInfogR_Dictionary();
@@ -897,6 +1170,136 @@ namespace ROOT {
       ((current_t*)p)->~current_t();
    }
 } // end of namespace ROOT for class vector<TriggerInfo*>
+
+namespace ROOT {
+   static TClass *vectorlETDCHitmUgR_Dictionary();
+   static void vectorlETDCHitmUgR_TClassManip(TClass*);
+   static void *new_vectorlETDCHitmUgR(void *p = 0);
+   static void *newArray_vectorlETDCHitmUgR(Long_t size, void *p);
+   static void delete_vectorlETDCHitmUgR(void *p);
+   static void deleteArray_vectorlETDCHitmUgR(void *p);
+   static void destruct_vectorlETDCHitmUgR(void *p);
+
+   // Function generating the singleton type initializer
+   static TGenericClassInfo *GenerateInitInstanceLocal(const vector<TDCHit*>*)
+   {
+      vector<TDCHit*> *ptr = 0;
+      static ::TVirtualIsAProxy* isa_proxy = new ::TIsAProxy(typeid(vector<TDCHit*>));
+      static ::ROOT::TGenericClassInfo 
+         instance("vector<TDCHit*>", -2, "vector", 389,
+                  typeid(vector<TDCHit*>), ::ROOT::Internal::DefineBehavior(ptr, ptr),
+                  &vectorlETDCHitmUgR_Dictionary, isa_proxy, 0,
+                  sizeof(vector<TDCHit*>) );
+      instance.SetNew(&new_vectorlETDCHitmUgR);
+      instance.SetNewArray(&newArray_vectorlETDCHitmUgR);
+      instance.SetDelete(&delete_vectorlETDCHitmUgR);
+      instance.SetDeleteArray(&deleteArray_vectorlETDCHitmUgR);
+      instance.SetDestructor(&destruct_vectorlETDCHitmUgR);
+      instance.AdoptCollectionProxyInfo(TCollectionProxyInfo::Generate(TCollectionProxyInfo::Pushback< vector<TDCHit*> >()));
+
+      ::ROOT::AddClassAlternate("vector<TDCHit*>","std::vector<TDCHit*, std::allocator<TDCHit*> >");
+      return &instance;
+   }
+   // Static variable to force the class initialization
+   static ::ROOT::TGenericClassInfo *_R__UNIQUE_DICT_(Init) = GenerateInitInstanceLocal((const vector<TDCHit*>*)0x0); R__UseDummy(_R__UNIQUE_DICT_(Init));
+
+   // Dictionary for non-ClassDef classes
+   static TClass *vectorlETDCHitmUgR_Dictionary() {
+      TClass* theClass =::ROOT::GenerateInitInstanceLocal((const vector<TDCHit*>*)0x0)->GetClass();
+      vectorlETDCHitmUgR_TClassManip(theClass);
+   return theClass;
+   }
+
+   static void vectorlETDCHitmUgR_TClassManip(TClass* ){
+   }
+
+} // end of namespace ROOT
+
+namespace ROOT {
+   // Wrappers around operator new
+   static void *new_vectorlETDCHitmUgR(void *p) {
+      return  p ? ::new((::ROOT::Internal::TOperatorNewHelper*)p) vector<TDCHit*> : new vector<TDCHit*>;
+   }
+   static void *newArray_vectorlETDCHitmUgR(Long_t nElements, void *p) {
+      return p ? ::new((::ROOT::Internal::TOperatorNewHelper*)p) vector<TDCHit*>[nElements] : new vector<TDCHit*>[nElements];
+   }
+   // Wrapper around operator delete
+   static void delete_vectorlETDCHitmUgR(void *p) {
+      delete ((vector<TDCHit*>*)p);
+   }
+   static void deleteArray_vectorlETDCHitmUgR(void *p) {
+      delete [] ((vector<TDCHit*>*)p);
+   }
+   static void destruct_vectorlETDCHitmUgR(void *p) {
+      typedef vector<TDCHit*> current_t;
+      ((current_t*)p)->~current_t();
+   }
+} // end of namespace ROOT for class vector<TDCHit*>
+
+namespace ROOT {
+   static TClass *vectorlEQDCHitmUgR_Dictionary();
+   static void vectorlEQDCHitmUgR_TClassManip(TClass*);
+   static void *new_vectorlEQDCHitmUgR(void *p = 0);
+   static void *newArray_vectorlEQDCHitmUgR(Long_t size, void *p);
+   static void delete_vectorlEQDCHitmUgR(void *p);
+   static void deleteArray_vectorlEQDCHitmUgR(void *p);
+   static void destruct_vectorlEQDCHitmUgR(void *p);
+
+   // Function generating the singleton type initializer
+   static TGenericClassInfo *GenerateInitInstanceLocal(const vector<QDCHit*>*)
+   {
+      vector<QDCHit*> *ptr = 0;
+      static ::TVirtualIsAProxy* isa_proxy = new ::TIsAProxy(typeid(vector<QDCHit*>));
+      static ::ROOT::TGenericClassInfo 
+         instance("vector<QDCHit*>", -2, "vector", 389,
+                  typeid(vector<QDCHit*>), ::ROOT::Internal::DefineBehavior(ptr, ptr),
+                  &vectorlEQDCHitmUgR_Dictionary, isa_proxy, 0,
+                  sizeof(vector<QDCHit*>) );
+      instance.SetNew(&new_vectorlEQDCHitmUgR);
+      instance.SetNewArray(&newArray_vectorlEQDCHitmUgR);
+      instance.SetDelete(&delete_vectorlEQDCHitmUgR);
+      instance.SetDeleteArray(&deleteArray_vectorlEQDCHitmUgR);
+      instance.SetDestructor(&destruct_vectorlEQDCHitmUgR);
+      instance.AdoptCollectionProxyInfo(TCollectionProxyInfo::Generate(TCollectionProxyInfo::Pushback< vector<QDCHit*> >()));
+
+      ::ROOT::AddClassAlternate("vector<QDCHit*>","std::vector<QDCHit*, std::allocator<QDCHit*> >");
+      return &instance;
+   }
+   // Static variable to force the class initialization
+   static ::ROOT::TGenericClassInfo *_R__UNIQUE_DICT_(Init) = GenerateInitInstanceLocal((const vector<QDCHit*>*)0x0); R__UseDummy(_R__UNIQUE_DICT_(Init));
+
+   // Dictionary for non-ClassDef classes
+   static TClass *vectorlEQDCHitmUgR_Dictionary() {
+      TClass* theClass =::ROOT::GenerateInitInstanceLocal((const vector<QDCHit*>*)0x0)->GetClass();
+      vectorlEQDCHitmUgR_TClassManip(theClass);
+   return theClass;
+   }
+
+   static void vectorlEQDCHitmUgR_TClassManip(TClass* ){
+   }
+
+} // end of namespace ROOT
+
+namespace ROOT {
+   // Wrappers around operator new
+   static void *new_vectorlEQDCHitmUgR(void *p) {
+      return  p ? ::new((::ROOT::Internal::TOperatorNewHelper*)p) vector<QDCHit*> : new vector<QDCHit*>;
+   }
+   static void *newArray_vectorlEQDCHitmUgR(Long_t nElements, void *p) {
+      return p ? ::new((::ROOT::Internal::TOperatorNewHelper*)p) vector<QDCHit*>[nElements] : new vector<QDCHit*>[nElements];
+   }
+   // Wrapper around operator delete
+   static void delete_vectorlEQDCHitmUgR(void *p) {
+      delete ((vector<QDCHit*>*)p);
+   }
+   static void deleteArray_vectorlEQDCHitmUgR(void *p) {
+      delete [] ((vector<QDCHit*>*)p);
+   }
+   static void destruct_vectorlEQDCHitmUgR(void *p) {
+      typedef vector<QDCHit*> current_t;
+      ((current_t*)p)->~current_t();
+   }
+} // end of namespace ROOT for class vector<QDCHit*>
 
 namespace ROOT {
    static TClass *vectorlEP_MPMTWaveformHeadergR_Dictionary();
@@ -1288,12 +1691,81 @@ namespace ROOT {
    }
 } // end of namespace ROOT for class vector<MPMTWaveformSamples>
 
+namespace ROOT {
+   static TClass *vectorlEHKMPMTHitmUgR_Dictionary();
+   static void vectorlEHKMPMTHitmUgR_TClassManip(TClass*);
+   static void *new_vectorlEHKMPMTHitmUgR(void *p = 0);
+   static void *newArray_vectorlEHKMPMTHitmUgR(Long_t size, void *p);
+   static void delete_vectorlEHKMPMTHitmUgR(void *p);
+   static void deleteArray_vectorlEHKMPMTHitmUgR(void *p);
+   static void destruct_vectorlEHKMPMTHitmUgR(void *p);
+
+   // Function generating the singleton type initializer
+   static TGenericClassInfo *GenerateInitInstanceLocal(const vector<HKMPMTHit*>*)
+   {
+      vector<HKMPMTHit*> *ptr = 0;
+      static ::TVirtualIsAProxy* isa_proxy = new ::TIsAProxy(typeid(vector<HKMPMTHit*>));
+      static ::ROOT::TGenericClassInfo 
+         instance("vector<HKMPMTHit*>", -2, "vector", 389,
+                  typeid(vector<HKMPMTHit*>), ::ROOT::Internal::DefineBehavior(ptr, ptr),
+                  &vectorlEHKMPMTHitmUgR_Dictionary, isa_proxy, 0,
+                  sizeof(vector<HKMPMTHit*>) );
+      instance.SetNew(&new_vectorlEHKMPMTHitmUgR);
+      instance.SetNewArray(&newArray_vectorlEHKMPMTHitmUgR);
+      instance.SetDelete(&delete_vectorlEHKMPMTHitmUgR);
+      instance.SetDeleteArray(&deleteArray_vectorlEHKMPMTHitmUgR);
+      instance.SetDestructor(&destruct_vectorlEHKMPMTHitmUgR);
+      instance.AdoptCollectionProxyInfo(TCollectionProxyInfo::Generate(TCollectionProxyInfo::Pushback< vector<HKMPMTHit*> >()));
+
+      ::ROOT::AddClassAlternate("vector<HKMPMTHit*>","std::vector<HKMPMTHit*, std::allocator<HKMPMTHit*> >");
+      return &instance;
+   }
+   // Static variable to force the class initialization
+   static ::ROOT::TGenericClassInfo *_R__UNIQUE_DICT_(Init) = GenerateInitInstanceLocal((const vector<HKMPMTHit*>*)0x0); R__UseDummy(_R__UNIQUE_DICT_(Init));
+
+   // Dictionary for non-ClassDef classes
+   static TClass *vectorlEHKMPMTHitmUgR_Dictionary() {
+      TClass* theClass =::ROOT::GenerateInitInstanceLocal((const vector<HKMPMTHit*>*)0x0)->GetClass();
+      vectorlEHKMPMTHitmUgR_TClassManip(theClass);
+   return theClass;
+   }
+
+   static void vectorlEHKMPMTHitmUgR_TClassManip(TClass* ){
+   }
+
+} // end of namespace ROOT
+
+namespace ROOT {
+   // Wrappers around operator new
+   static void *new_vectorlEHKMPMTHitmUgR(void *p) {
+      return  p ? ::new((::ROOT::Internal::TOperatorNewHelper*)p) vector<HKMPMTHit*> : new vector<HKMPMTHit*>;
+   }
+   static void *newArray_vectorlEHKMPMTHitmUgR(Long_t nElements, void *p) {
+      return p ? ::new((::ROOT::Internal::TOperatorNewHelper*)p) vector<HKMPMTHit*>[nElements] : new vector<HKMPMTHit*>[nElements];
+   }
+   // Wrapper around operator delete
+   static void delete_vectorlEHKMPMTHitmUgR(void *p) {
+      delete ((vector<HKMPMTHit*>*)p);
+   }
+   static void deleteArray_vectorlEHKMPMTHitmUgR(void *p) {
+      delete [] ((vector<HKMPMTHit*>*)p);
+   }
+   static void destruct_vectorlEHKMPMTHitmUgR(void *p) {
+      typedef vector<HKMPMTHit*> current_t;
+      ((current_t*)p)->~current_t();
+   }
+} // end of namespace ROOT for class vector<HKMPMTHit*>
+
 namespace {
   void TriggerDictionaryInitialization_WCTE_RootDict_Impl() {
     static const char* headers[] = {
 "/root/WCTEDAQ/DataModel/DAQInfo.h",
 "/root/WCTEDAQ/DataModel/ReadoutWindow.h",
+"/root/WCTEDAQ/DataModel/WCTEMPMTPPS.h",
+"/root/WCTEDAQ/DataModel/TDCHit.h",
+"/root/WCTEDAQ/DataModel/QDCHit.h",
 "/root/WCTEDAQ/DataModel/MPMTMessages.h",
+"/root/WCTEDAQ/DataModel/MPMTMessageData.h",
 "/root/WCTEDAQ/DataModel/MPMTWaveformSamples.h",
 "/root/WCTEDAQ/DataModel/TriggerType.h",
 "SerialisableObject.h",
@@ -1319,12 +1791,16 @@ struct __attribute__((annotate("$clingAutoload$MPMTMessages.h")))  __attribute__
 struct __attribute__((annotate("$clingAutoload$MPMTMessages.h")))  __attribute__((annotate("$clingAutoload$ReadoutWindow.h")))  P_MPMTWaveformHeader;
 struct __attribute__((annotate("$clingAutoload$MPMTWaveformSamples.h")))  MPMTWaveformSamples;
 class __attribute__((annotate("$clingAutoload$SerialisableObject.h")))  SerialisableObject;
+class __attribute__((annotate("$clingAutoload$WCTEMPMTPPS.h")))  __attribute__((annotate("$clingAutoload$TriggerType.h")))  WCTEMPMTPPS;
 struct __attribute__((annotate("$clingAutoload$TriggerType.h")))  MPMTLED;
 struct __attribute__((annotate("$clingAutoload$TriggerType.h")))  P_MPMTLED;
 class __attribute__((annotate("$clingAutoload$DAQInfo.h")))  DAQInfo;
+class __attribute__((annotate("$clingAutoload$TDCHit.h")))  __attribute__((annotate("$clingAutoload$ReadoutWindow.h")))  TDCHit;
+class __attribute__((annotate("$clingAutoload$QDCHit.h")))  __attribute__((annotate("$clingAutoload$ReadoutWindow.h")))  QDCHit;
 struct __attribute__((annotate("$clingAutoload$MPMTMessages.h")))  __attribute__((annotate("$clingAutoload$ReadoutWindow.h")))  MPMTWaveformHeader;
 struct __attribute__((annotate("$clingAutoload$MPMTMessages.h")))  __attribute__((annotate("$clingAutoload$ReadoutWindow.h")))  MPMTHit;
 class __attribute__((annotate("$clingAutoload$ReadoutWindow.h")))  PReadoutWindow;
+struct __attribute__((annotate("$clingAutoload$MPMTMessageData.h")))  MPMTMessageData;
 )DICTFWDDCLS";
     static const char* payloadCode = R"DICTPAYLOAD(
 #line 1 "WCTE_RootDict dictionary payload"
@@ -1334,7 +1810,11 @@ class __attribute__((annotate("$clingAutoload$ReadoutWindow.h")))  PReadoutWindo
 // Inline headers
 #include "/root/WCTEDAQ/DataModel/DAQInfo.h"
 #include "/root/WCTEDAQ/DataModel/ReadoutWindow.h"
+#include "/root/WCTEDAQ/DataModel/WCTEMPMTPPS.h"
+#include "/root/WCTEDAQ/DataModel/TDCHit.h"
+#include "/root/WCTEDAQ/DataModel/QDCHit.h"
 #include "/root/WCTEDAQ/DataModel/MPMTMessages.h"
+#include "/root/WCTEDAQ/DataModel/MPMTMessageData.h"
 #include "/root/WCTEDAQ/DataModel/MPMTWaveformSamples.h"
 #include "/root/WCTEDAQ/DataModel/TriggerType.h"
 #include "SerialisableObject.h"
@@ -1345,6 +1825,11 @@ class __attribute__((annotate("$clingAutoload$ReadoutWindow.h")))  PReadoutWindo
 #include "ReadoutWindow.h"
 #include "MPMTMessages.h"
 #include "MPMTWaveformSamples.h"
+#include "MPMTMessageData.h"
+#include "WCTEMPMTPPS.h"
+#include "TDCHit.h"
+#include "QDCHit.h"
+#include "BitFunctions.h"
 #pragma link off all globals;
 #pragma link off all classes;
 #pragma link off all functions;
@@ -1354,10 +1839,14 @@ class __attribute__((annotate("$clingAutoload$ReadoutWindow.h")))  PReadoutWindo
 #pragma link C++ class MPMTLED+;
 #pragma link C++ class P_MPMTLED+;
 #pragma link C++ class MPMTHit+;
+#pragma link C++ class WCTEMPMTPPS+;
+#pragma link C++ class TDCHit+;
+#pragma link C++ class QDCHit+;
 #pragma link C++ class P_MPMTHit+;
 #pragma link C++ class MPMTWaveformHeader+;
 #pragma link C++ class P_MPMTWaveformHeader+;
 #pragma link C++ class MPMTWaveformSamples+;
+#pragma link C++ class MPMTMessageData+;
 #pragma link C++ class TriggerInfo+;
 #pragma link C++ class vector<TriggerInfo>+;
 #pragma link C++ class vector<TriggerInfo*>+;
@@ -1374,14 +1863,18 @@ class __attribute__((annotate("$clingAutoload$ReadoutWindow.h")))  PReadoutWindo
 "DAQInfo", payloadCode, "@",
 "MPMTHit", payloadCode, "@",
 "MPMTLED", payloadCode, "@",
+"MPMTMessageData", payloadCode, "@",
 "MPMTWaveformHeader", payloadCode, "@",
 "MPMTWaveformSamples", payloadCode, "@",
 "PReadoutWindow", payloadCode, "@",
 "P_MPMTHit", payloadCode, "@",
 "P_MPMTLED", payloadCode, "@",
 "P_MPMTWaveformHeader", payloadCode, "@",
+"QDCHit", payloadCode, "@",
 "SerialisableObject", payloadCode, "@",
+"TDCHit", payloadCode, "@",
 "TriggerInfo", payloadCode, "@",
+"WCTEMPMTPPS", payloadCode, "@",
 nullptr
 };
     static bool isInitialized = false;
