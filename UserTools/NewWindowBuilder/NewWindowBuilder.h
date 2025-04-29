@@ -25,6 +25,9 @@ struct NewWindowBuilder_args:Thread_args{
   std::map<TriggerType, unsigned long> post_trigger;
   std::map<TriggerType, long> offset_trigger;
   std::map<unsigned int, MPMTData*> triggered_data;
+  std::map<TriggerType, unsigned int> downsample_trigger;
+  std::map<TriggerType, unsigned long> trigger_counts;
+  std::map<TriggerType, std::mutex> trigger_counts_mtx;
 };
 
 
@@ -38,6 +41,9 @@ struct BuildWindow_args:Thread_args{
   std::map<TriggerType, unsigned long>* pre_trigger;
   std::map<TriggerType, unsigned long>* post_trigger;
   std::map<TriggerType, long>* offset_trigger;
+  std::map<TriggerType, unsigned int>* downsample_trigger;
+  std::map<TriggerType, unsigned long>* trigger_counts;
+  std::map<TriggerType, std::mutex>* trigger_counts_mtx;
 
 
   unsigned int header_coarse_counter;

@@ -18,7 +18,7 @@ if (tool=="Monitoring") ret=new Monitoring;
 if (tool=="MPMT2") ret=new MPMT2;
 if (tool=="MPMT3") ret=new MPMT3;
 if (tool=="MPMT5") ret=new MPMT5;
-if (tool=="MPMT") ret=new MPMT;
+//if (tool=="MPMT") ret=new MPMT;
 if (tool=="NewTrigger") ret=new NewTrigger;
 if (tool=="NewWindowBuilder") ret=new NewWindowBuilder;
 if (tool=="Nhits") ret=new Nhits;

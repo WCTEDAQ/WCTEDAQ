@@ -18,6 +18,7 @@ struct MPMT5Messages{
   DataModel* m_data;
   unsigned int* time_corrections; 
   std::map<std::string, unsigned int> *hit_rates;
+  unsigned int hitcount;
 
 };
 

@@ -132,7 +132,7 @@ void RootWriter::Thread(Thread_args* arg){
 		dothecheck=false;
 		if(m_args->lapse.total_seconds() > m_args->period.total_seconds()){
 			printf("Warning! RootWriter not keeping up with data taking rate!\n"); // TODO send warning alert
-			m_args->m_data->services->SendAlarm("Warning RootWriter : RootWriter Not keeping up with data taking rate!'");
+			if(m_args->m_data->running) m_args->m_data->services->SendAlarm("Warning RootWriter : RootWriter Not keeping up with data taking rate!'");
 		}
 	}
 	
@@ -156,7 +156,7 @@ void RootWriter::Thread(Thread_args* arg){
 	}
 	
 	// time to write!... probably.
-	m_args->last= boost::posix_time::microsec_clock::universal_time();
+	m_args->last = boost::posix_time::microsec_clock::universal_time();
 	
 	// but first, check if we have data to write
 	bool makefile=false;
@@ -302,9 +302,24 @@ void RootWriter::Thread(Thread_args* arg){
 		}
 		t_pps->ResetBranchAddresses();
 		
-		// cleanup. don't need to delete the elements, they're not pointers
-		m_args->pps->resize(0);
-		m_args->pps->shrink_to_fit();
+		// cleanup. 
+		m_args->m_data->mon_pps_mtx.lock();
+		if(m_args->m_data->mon_pps!=nullptr){
+			// if we have a monitoring pps vector, put the PPS frames in there
+			if(m_args->m_data->mon_pps->size()){
+				m_args->m_data->mon_pps->insert(m_args->m_data->mon_pps->end(), m_args->pps->begin(), m_args->pps->end());
+				m_args->pps->resize(0);
+				m_args->pps->shrink_to_fit();
+			} else {
+				std::swap(m_args->m_data->mon_pps,m_args->pps);
+			}
+		} else {
+			// otherwise just clear them
+			// (don't need to delete the elements, they're not pointers)
+			m_args->pps->resize(0);
+			m_args->pps->shrink_to_fit();
+		}
+		m_args->m_data->mon_pps_mtx.unlock();
 		
 		// next readout windows
 		// a PReadoutWindow will map to the data TTree, with one branch for each member vector
@@ -342,6 +357,7 @@ void RootWriter::Thread(Thread_args* arg){
 			std::vector<QDCHit*>* qdc_hits_p = &prw->qdc_hits;
 			
 			// we have a couple of simple variables too
+			unsigned long spill_num = prw->spill_num;
 			unsigned long readout_num = prw->readout_num;
 			unsigned long start_counter = prw->start_counter;
 			
@@ -393,7 +409,7 @@ void RootWriter::Thread(Thread_args* arg){
 				}
 				//next_hdr->Print();
 				//std::cout<<"waveform header at "<<next_hdr->waveform_header
-				//         <<", card "<<next_hdr->card_id<<", spill "<<next_hdr->spill_num<<std::endl;
+				//         <<", card "<<next_hdr->card_id<<std::endl;
 				
 				// debug check
 				/*
@@ -465,6 +481,7 @@ void RootWriter::Thread(Thread_args* arg){
 			t_data->SetBranchAddress("tdc_hits",&tdc_hits_p);
 			t_data->SetBranchAddress("qdc_hits",&qdc_hits_p);
 			t_data->SetBranchAddress("readout_num",&readout_num);
+			t_data->SetBranchAddress("spill_num",&spill_num);
 			t_data->SetBranchAddress("start_counter",&start_counter);
 			
 			// add data to tree
@@ -531,7 +548,7 @@ bool RootWriter::LoadConfig(){
 	if(!m_variables.Get("verbose",m_verbose)) m_verbose=1;
 	if(!m_variables.Get("file_path",m_file_name)) m_file_name="./data"; // including path, R**S**P**.root will be appended
 	if(!m_variables.Get("file_writeout_period",m_file_writeout_period)) m_file_writeout_period=60; // 300
-	if(!m_variables.Get("file_writeout_threshold",m_file_writeout_threshold)) m_file_writeout_threshold=2100000;
+	if(!m_variables.Get("file_writeout_threshold",m_file_writeout_threshold)) m_file_writeout_threshold=-1;
 	thread_args->period=boost::posix_time::seconds(m_file_writeout_period);
 	
 	return true;
@@ -554,6 +571,7 @@ TTree* RootWriter::MakeDataTree(std::string name, std::string title){
 		std::vector<HKMPMTHit*> hk_mpmt_hits;
 		std::vector<TDCHit*> tdc_hits;
 		std::vector<QDCHit*> qdc_hits;
+		unsigned long spill_num;
 		unsigned long readout_num;
 		unsigned long start_counter;
 		
@@ -568,6 +586,7 @@ TTree* RootWriter::MakeDataTree(std::string name, std::string title){
 		t_ref->Branch("hk_mpmt_hits",&hk_mpmt_hits,bufsize,splitlevel);
 		t_ref->Branch("tdc_hits",&tdc_hits,bufsize,splitlevel);
 		t_ref->Branch("qdc_hits",&qdc_hits,bufsize,splitlevel);
+		t_ref->Branch("spill_num",&spill_num,"spill_num/g");
 		t_ref->Branch("readout_num",&readout_num,"readout_num/g");
 		t_ref->Branch("start_counter",&start_counter,"start_counter/g");
 		

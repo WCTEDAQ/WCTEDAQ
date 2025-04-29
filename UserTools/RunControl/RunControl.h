@@ -26,6 +26,7 @@ struct RunControl_args:Thread_args{
   bool* spill_update_flag;
   unsigned long* spill_num;
   std::mutex* spill_update_flag_mtx;
+  DataModel* m_data;
 };
 
 /**

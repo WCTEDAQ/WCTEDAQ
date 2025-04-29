@@ -3,6 +3,7 @@
 
 #include <string>
 #include <iostream>
+#include <numeric>
 
 #include "Tool.h"
 #include "DataModel.h"
@@ -68,6 +69,7 @@ class LED: public Tool {
   void ReinitSequence();
   std::string BuildLedJson(int sequence_num, int sequences_performed, unsigned long last_beamspill_counts, unsigned long& last_flash_counts);
   std::string BuildSWTriggerJson(unsigned int MPMT_ID, unsigned long last_flash_counts);
+  bool SendGroupCommand(std::string Group, std::string Command, std::string Value, const unsigned int timeout=2000);
   
   std::string m_configfile;
 
@@ -75,18 +77,19 @@ class LED: public Tool {
   unsigned int delay_after_beam_counts;
   boost::posix_time::seconds delay_after_beam{1};
   
-  unsigned int wait_to_start;
+  unsigned long wait_to_start;
   unsigned int led_advance_counts;
   unsigned int waveform_presamples;
   std::vector<Store> firing_sequence;
   int sequence_repetitions;
   Store SWTriggerAlertStore;
+  std::vector<int> mpmt_ids; // set of MPMTs in this run, they will be who we send SoftTrigger alerts to (if enabled)
   
-  unsigned int sequence_period_counts;
+  unsigned long sequence_period_counts;
   boost::posix_time::microseconds sequence_period{1};
   
   boost::posix_time::microseconds alert_prewarn{1};
-  long int bens_offset;
+  long bens_offset;
   
   bool last_running; // was run started on last Execute call
   

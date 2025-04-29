@@ -7,6 +7,7 @@ MPMT5Messages::MPMT5Messages(){
   m_data=0;
   time_corrections=0;
   hit_rates=0;
+  hitcount=0;
   
 }
 
@@ -19,6 +20,7 @@ MPMT5Messages::~MPMT5Messages(){
   m_data=0;
   time_corrections=0;
   hit_rates=0;
+  hitcount=0;
 }
 
 MPMT5_args::MPMT5_args():Thread_args(){
@@ -160,8 +162,8 @@ bool MPMT5::Execute(){
 	it->second=0;
       }
       m_data->data_chunks.clear();
-      // std::map<unsigned int, MPMTCollection*> tmp;
-      //   m_data->data_chunks.swap(tmp);
+      std::map<unsigned int, MPMTCollection*> tmp;
+      std::swap(m_data->data_chunks , tmp);
     }
     m_data->data_chunks_mtx.unlock();
 
@@ -252,7 +254,7 @@ void MPMT5::CreateThread(){
   int correction =0;
   for(unsigned int i=0; i<200; i++){
     if(times.Get(std::to_string(i),correction)){
-      tmparg->time_corrections[i]=correction*12;
+      tmparg->time_corrections[i]=correction*16;
       //tmparg->time_corrections[i]=0;
     }
     else tmparg->time_corrections[i]=0;
@@ -425,7 +427,7 @@ bool MPMT5::ProcessData(void* data){
   //printf("d1\n");  
   DAQHeader* daq_header=reinterpret_cast<DAQHeader*>(msgs->mpmt_message->daq_header.data());
 
-  unsigned short card_id = daq_header->GetCardID();
+  unsigned char card_id = (unsigned char) daq_header->GetCardID();
   
   unsigned int bin= (daq_header->GetCoarseCounter()) >>7; //+ msgs->time_corrections[card_id]) >> 7;
   //printf("coarse counts: mpmt=%lu, daq=%lu\n", bin, msgs->m_data->current_coarse_counter >>23);
@@ -440,7 +442,7 @@ bool MPMT5::ProcessData(void* data){
     std::string reason = "too late";
     if(card_id>132) reason = "bad card";
     if(bin > ((msgs->m_data->current_coarse_counter >>23) +150)) reason="too early";
-    printf("bad data: %s, card_id %d, coarse counts: mpmt=%lu, daq=%lu\n", reason.c_str(), card_id, daq_header->GetCoarseCounter(), msgs->m_data->current_coarse_counter >>16);
+    //printf("bad data: %s, card_id %d, coarse counts: mpmt=%lu, daq=%lu\n", reason.c_str(), card_id, daq_header->GetCoarseCounter(), msgs->m_data->current_coarse_counter >>16);
     delete msgs->mpmt_message;
     msgs->mpmt_message=0;
     delete msgs;
@@ -514,9 +516,14 @@ bool MPMT5::ProcessData(void* data){
 	MPMTHit* tmp= reinterpret_cast<MPMTHit*>(&mpmt_data[current_byte]);
 	//	if((!tmp->GetChannel()<10) || card_type!=3U)	msgs->mpmt_message->hits.emplace_back(tmp, msgs->m_data->spill_num, card_id);
 	if(card_type!=3U){
-	  if(card_id != 130 && card_id != 132) msgs->mpmt_message->hits.emplace_back(tmp, msgs->m_data->spill_num, card_id);
-	  else{
-	    P_MPMTHit* tmp_hit= new P_MPMTHit(tmp, msgs->m_data->spill_num, card_id);
+	  if(card_id != 130 && card_id != 132){
+	    msgs->mpmt_message->hits.emplace_back(tmp, card_id);
+	    //marcus added
+	    ++msgs->hitcount;  // FINDME
+	    //
+	    
+	  } else{
+	    P_MPMTHit* tmp_hit= new P_MPMTHit(tmp, card_id);
 	    triggers.push_back(tmp_hit);
 	  }
 	}
@@ -528,13 +535,13 @@ bool MPMT5::ProcessData(void* data){
 	else{
 	  //  if(tmp->GetChannel()<10 && card_type==3U){
 	  //printf("trigger card\n");
-	  P_MPMTHit* tmp_hit= new P_MPMTHit(tmp, msgs->m_data->spill_num, card_id);
+	  P_MPMTHit* tmp_hit= new P_MPMTHit(tmp, card_id);
 	  
 	  triggers.push_back(tmp_hit);
 	  if(tmp->GetChannel()<10){
 	    TriggerInfo* trigger_info = new TriggerInfo;
 	    trigger_info->time= (((unsigned long)(daq_header->GetCoarseCounter() & 4294901760U ))<<16)  | (tmp->GetCoarseCounter());
-	    if((daq_header->GetCoarseCounter() & 65535U) > (tmp->GetCoarseCounter() >>16)) trigger_info->time+=65536U;
+	    if((daq_header->GetCoarseCounter() & 65535U) > (tmp->GetCoarseCounter() >>16)) trigger_info->time+=4294967296ull;// 65536U;
 	    //trigger_info->time+=msgs->time_corrections[card_id];
 	    trigger_info->card_id=card_id;
 	    trigger_info->spill_num=msgs->m_data->spill_num;
@@ -646,25 +653,37 @@ bool MPMT5::ProcessData(void* data){
       //      }// its a pedistal (dont know) 
       
       else if(((mpmt_data[current_byte] >> 2) & 0b00001111 ) == 14U && bytes-current_byte >= WCTEMPMTLED::GetSize()){// its LED
-	//printf("in led cardid=%u, coarse counter=%ul\n",card_id, msgs->m_data->current_coarse_counter);
 	//	WCTEMPMTLED tmp(card_id, &mpmt_data[current_byte]);
 	//tmp.SetCoarseCounter(tmp.GetCoarseCounter() + 12*msgs->time_corrections[card_id]);
 
 	MPMTLED* tmp = reinterpret_cast<MPMTLED*>(&mpmt_data[current_byte]);
-	P_MPMTLED* tmp_led = new P_MPMTLED(tmp, msgs->m_data->spill_num, card_id);
+	P_MPMTLED* tmp_led = new P_MPMTLED(tmp, card_id);
 	//leds.push_back(tmp_led);
 	//	leds.push_back(tmp);
 	//tmp->Print();
 
 	TriggerInfo* trigger_info = new TriggerInfo;
 	trigger_info->type= TriggerType::LED;
-	trigger_info->time= ((daq_header->GetCoarseCounter() & 4294901760U )<<16)  | (tmp->GetCoarseCounter());
-	if((daq_header->GetCoarseCounter() & 65535U) > (tmp->GetCoarseCounter() >>16)) trigger_info->time+=65536U;
-	trigger_info->time+=msgs->time_corrections[card_id];
+
+	trigger_info->time= (((unsigned long)(daq_header->GetCoarseCounter() & 4294901760U ))<<16)  | (tmp->GetCoarseCounter());
+	if((daq_header->GetCoarseCounter() & 65535U) > (tmp->GetCoarseCounter() >>16)) trigger_info->time+=4294967296ull;//65536U;
+	//printf("in led cardid=%u, daq coarse counter=%lu, LED coarse counter=%lu, trigger time=%lu\n",card_id, msgs->m_data->current_coarse_counter, tmp->GetCoarseCounter(), trigger_info->time);
+	//	trigger_info->time+=msgs->time_corrections[card_id];
 	trigger_info->card_id=card_id;
 	trigger_info->spill_num=msgs->m_data->spill_num;
 	trigger_info->mpmt_LEDs.push_back(tmp_led);
 	triggers_info.push_back(trigger_info);
+	
+	/*
+	char logmsg[256];
+	snprintf(logmsg, 256, "LED frame from MPMT %u at initial coarse counter %lu, corrected to %lu, time bin %llu\n",card_id, tmp->GetCoarseCounter(), trigger_info->time, bin);
+	std::string ledmsgs;
+	m_data->monitoring_stream_mtx.lock();
+	msgs->m_data->monitoring_stream.Get("LED_frames",ledmsgs);
+	ledmsgs += logmsg;
+	msgs->m_data->monitoring_stream.Set("LED_frames",ledmsgs);
+	m_data->monitoring_stream_mtx.unlock();
+	*/
 	
 	current_byte+=WCTEMPMTLED::GetSize();
 	//unsigned int tmp_bin = (daq_header->GetCoarseCounter() & 4294901760U ) | (tmp.GetCoarseCounter() >>16);
@@ -687,11 +706,13 @@ bool MPMT5::ProcessData(void* data){
       else if(((mpmt_data[current_byte] >> 2) & 0b00001111 ) == 15U && bytes-current_byte >= WCTEMPMTPPS::GetSize() ){// its PPS
 	//printf("in pps\n");
 	msgs->m_data->pps_mtx.lock();
-	//	msgs->m_data->pps->emplace_back(card_id, &mpmt_data[current_byte]);
-	//if((msgs->m_data->pps->back().GetReserved() & 0b10) !=2 && msgs->m_data->pps->back().GetCurrentPPSCoarseCounter() - msgs->m_data->pps->back().GetPreviousPPSCoarseCounter() != 125000000){
-	  //  msgs->m_data->services->SendAlarm("ERROR MPMT"+ std::to_string(card_id)+": PPS check fail current="+std::to_string(msgs->m_data->pps->back().GetCurrentPPSCoarseCounter())+", previous ="+std::to_string(msgs->m_data->pps->back().GetPreviousPPSCoarseCounter()));
-	  //msgs->m_data->services->SendLog("ERROR MPMT"+ std::to_string(card_id)+": PPS check fail current="+std::to_string(msgs->m_data->pps->back().GetCurrentPPSCoarseCounter())+", previous ="+std::to_string(msgs->m_data->pps->back().GetPreviousPPSCoarseCounter()),v_message);
-	//}
+	msgs->m_data->pps->emplace_back(card_id, &mpmt_data[current_byte]);
+	if((msgs->m_data->pps->back().GetReserved() & 0b10) !=2 &&
+	   ( msgs->m_data->pps->back().GetCurrentPPSCoarseCounter() - msgs->m_data->pps->back().GetPreviousPPSCoarseCounter() > 125000010) ||
+	   (msgs->m_data->pps->back().GetCurrentPPSCoarseCounter() - msgs->m_data->pps->back().GetPreviousPPSCoarseCounter() < 124999990 )){
+	  //	  msgs->m_data->services->SendAlarm("ERROR MPMT"+ std::to_string(card_id)+": PPS check fail current="+std::to_string(msgs->m_data->pps->back().GetCurrentPPSCoarseCounter())+", previous ="+std::to_string(msgs->m_data->pps->back().GetPreviousPPSCoarseCounter()));
+	  msgs->m_data->services->SendLog("ERROR MPMT"+ std::to_string(card_id)+": PPS check fail current="+std::to_string(msgs->m_data->pps->back().GetCurrentPPSCoarseCounter())+", previous ="+std::to_string(msgs->m_data->pps->back().GetPreviousPPSCoarseCounter()),v_message);
+	}
 	
 	msgs->m_data->pps_mtx.unlock();
 	
@@ -707,7 +728,7 @@ bool MPMT5::ProcessData(void* data){
       }
       else{
 	 //printf("none of hit LED or pps despite saying it is\n");
-	std::string tmp="ERROR: Data from MPMT" +  std::to_string(card_id)  +" is courupt or of uknown structure. event type is" + std::to_string(((mpmt_data[current_byte] >> 2) & 0b00001111 ));
+	std::string tmp="ERROR: Data from MPMT" +  std::to_string(card_id)  +" is corrupt or of uknown structure. event type is" + std::to_string(((mpmt_data[current_byte] >> 2) & 0b00001111 ));
 	//	for(std::map<unsigned int, MPMTData*>::iterator it=local_data.begin(); it!=local_data.end(); it++){
 	//	  delete it->second;
 	//it->second=0;
@@ -745,7 +766,7 @@ bool MPMT5::ProcessData(void* data){
       // printf("k1 channel=%u\n", tmp.header.GetChannel());
 
       //MPMTWaveformHeader* tmp = reinterpret_cast<MPMTWaveformHeader*>(&mpmt_data[current_byte]);
-      msgs->mpmt_message->waveforms.emplace_back(reinterpret_cast<MPMTWaveformHeader*>(&mpmt_data[current_byte]), msgs->m_data->spill_num, card_id);
+      msgs->mpmt_message->waveforms.emplace_back(reinterpret_cast<MPMTWaveformHeader*>(&mpmt_data[current_byte]), card_id);
       current_byte+=  WCTEMPMTWaveformHeader::GetSize() +  msgs->mpmt_message->waveforms.back().waveform_header->GetLength();
 			     //      waveforms.push_back(tmp);
 
@@ -811,7 +832,7 @@ bool MPMT5::ProcessData(void* data){
       //printf("(mpmt_data[current_byte] >> 6)%u\n", (mpmt_data[current_byte] >> 6));
       // printf("(mpmt_data[current_byte] >> 6)%u\n", (mpmt_data[current_byte] >> 6));
       
-      std::string tmp="ERROR: Waveform data from MPMT" +  std::to_string(card_id)  +" is courupt or of uknown structure.";
+      std::string tmp="ERROR: Waveform data from MPMT" +  std::to_string(card_id)  +" is corrupt or of uknown structure.";
       msgs->m_data->services->SendLog(tmp,0);
       // for(std::map<unsigned int, MPMTData*>::iterator it=local_data.begin(); it!=local_data.end(); it++){
       //	delete it->second;
@@ -873,6 +894,8 @@ bool MPMT5::ProcessData(void* data){
     if(triggers.size()) msgs->m_data->data_chunks[bin]->triggers.insert( msgs->m_data->data_chunks[bin]->triggers.end(), triggers.begin(), triggers.end());
     //if(leds.size()) msgs->m_data->data_chunks[bin]->leds.insert( msgs->m_data->data_chunks[bin]->leds.end(), leds.begin(), leds.end());
     
+    // FINDME
+    msgs->m_data->data_chunks[bin]->hitcounts[(short)card_id] += msgs->hitcount;
     
     msgs->m_data->data_chunks[bin]->mtx.unlock();
     /* 
@@ -974,8 +997,8 @@ bool MPMT5::ProcessData(void* data){
   //  msgs->m_data->unsorted_data[bin]->Print();
   //printf("d10\n");
     std::stringstream tmp;
-    tmp<<"MPMT:"<<card_id;
-    msgs->m_data->hit_map[tmp.str()]++;
+    tmp<<"MPMT:"<<((short)card_id);
+    msgs->m_data->hit_map[tmp.str()]++;  // FIXME no locking?
     //printf("delete data\n");
     //delete msgs->daq_header;
     //msgs->daq_header=0;

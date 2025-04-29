@@ -79,15 +79,14 @@ struct P_MPMTWaveformHeader :SerialisableObject {
 
   MPMTWaveformHeader* waveform_header=0;
   unsigned char* bytes; //! << load bearing comment, don't serialise it ROOT
-  unsigned long spill_num;
+  //unsigned long spill_num;
   
-  unsigned short card_id;
+  unsigned char card_id;
   bool Print(){return waveform_header->Print();}
   P_MPMTWaveformHeader(){};
   
-  P_MPMTWaveformHeader(MPMTWaveformHeader* in_waveform_header, unsigned long in_spill_num, unsigned short in_card_id){
+  P_MPMTWaveformHeader(MPMTWaveformHeader* in_waveform_header, unsigned char in_card_id){
     waveform_header=in_waveform_header;
-    spill_num=in_spill_num;
     card_id=in_card_id;
     bytes = in_waveform_header->GetData() + in_waveform_header->GetSize();
   }
@@ -112,7 +111,7 @@ struct P_MPMTWaveformHeader :SerialisableObject {
       bs.Bread(&bytes[0], waveform_header->GetLength());
     }
     
-    bs & spill_num;
+    //bs & spill_num;
     bs & card_id;
 
     return true;
@@ -179,17 +178,15 @@ struct P_MPMTHit: SerialisableObject {
   MPMTHit* hit;
   bool Print(){ return hit->Print();}
   
-  unsigned long spill_num;
-  unsigned short card_id;
+  // unsigned long spill_num;
+  unsigned char card_id;
   std::string GetVersion(){return "1";};
   P_MPMTHit(){
     hit=nullptr;
-    spill_num=0;
     card_id=0;
   };
-  P_MPMTHit(MPMTHit* in_hit, unsigned long in_spill_num, unsigned short in_card_id){
+  P_MPMTHit(MPMTHit* in_hit, unsigned char in_card_id){
     hit=in_hit;
-    spill_num=in_spill_num;
     card_id = in_card_id;
   }
   ~P_MPMTHit(){
@@ -204,7 +201,7 @@ struct P_MPMTHit: SerialisableObject {
     if(hit==0) hit=new MPMTHit();
     
     bs & hit->data;
-    bs & spill_num;
+    //bs & spill_num;
     bs & card_id;
 
     return true;
@@ -218,8 +215,8 @@ struct P_MPMTHit: SerialisableObject {
     memcpy(ms1.data(), &card_id, sizeof card_id);
     memcpy(ms2.data(), hit, hit->GetSize());
     
-		       //    zmq::message_t ms1(&spill_num,sizeof spill_num, bencleanup);
-		       //zmq::message_t ms2(hit,hits->GetSize(), bencleanup);
+    //zmq::message_t ms1(&spill_num,sizeof spill_num, bencleanup);
+    //zmq::message_t ms2(hit,hits->GetSize(), bencleanup);
 
     sock->send(ms1, ZMQ_SNDMORE);
     sock->send(ms2, flag);
@@ -286,11 +283,16 @@ class MPMTMessage : public SerialisableObject{
 class MPMTCollection : public SerialisableObject{
 
  public:
+  MPMTCollection(){
+    memset(hitcounts, 0, sizeof(unsigned int)*132); // FINDME
+  }
   std::vector<MPMTMessage*> mpmt_output;
   
   std::vector<TriggerInfo*> triggers_info;
   std::vector<P_MPMTHit*> triggers;
   std::mutex mtx;
+  
+  unsigned int hitcounts[132]; // FINDME
 
   ~MPMTCollection(){
 

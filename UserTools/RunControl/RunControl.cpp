@@ -54,6 +54,7 @@ bool RunControl::Initialise(std::string configfile, DataModel &data){
   args->spill_update_flag=&m_data->spill_update_flag;
   args->spill_num=&m_data->spill_num;  
   args->spill_update_flag_mtx=&m_data->spill_update_flag_mtx;
+  args->m_data=m_data;
   //printf("d6\n");
 
   m_data->current_coarse_counter =0;
@@ -149,14 +150,16 @@ bool RunControl::Execute(){
 	      if(!ok){
 	        // FIXME what do do about updating configs, sending an alert, and then finding an error trying to make new run DB entry?
 	        std::string errmsg = "ERROR "+m_tool_name+"::Execute Failed to make run_info database entry for new run with response '"+response+"'";
-	        throw std::runtime_error(errmsg);
+	        m_data->services->SendAlarm(errmsg);
+	        //throw std::runtime_error(errmsg); // do not throw! if RunStart alert went through we do not want to duplicate it!
 	      }
 	      
 	      Store response_store;
 	      response_store.JsonParser(response);
 	      if(!response_store.Get("run",m_data->run_number)){
 	        std::string errmsg = "ERROR "+m_tool_name+"::Execute failed to extract new run number from response '"+response+"'";
-	        throw std::runtime_error(errmsg);
+	        m_data->services->SendAlarm(errmsg);
+	        //throw std::runtime_error(errmsg); // do not throw! if RunStart alert went through we do not want to duplicate it!
 	      }
 	      m_data->sub_run_number=0;
 	      
@@ -256,6 +259,7 @@ void RunControl::Thread(Thread_args* arg){
 	//	printf("spill_num before =%lu, p=%p, b=%d, \n", *(args->spill_num), args->spill_num, *(args->spill_update_flag));
 	*(args->spill_num)= *(args->spill_num) + 1;
 	//	printf("spill_num before =%lu, p=%p, b=%d, \n", *(args->spill_num), args->spill_num, *(args->spill_update_flag));
+	args->m_data->services->AlertSend("SpillNum", std::to_string(*(args->spill_num)));
 	printf("spill_num=%lu\n", *(args->spill_num));
       }
     }
@@ -300,7 +304,7 @@ std::string RunControl::RunStart(const char* key){
   // send alert to inform other systems to update their configurations
   std::string json_payload="{\"RunConfig\":" + std::to_string(m_data->run_configuration) + "}";
   // /*  commented out for fake data   
-bool ok = m_data->sc_vars.AlertSend("ChangeConfig", json_payload);
+  bool ok = m_data->sc_vars.AlertSend("ChangeConfig", json_payload);
   if(!ok){
     std::string errmsg = "ERROR "+m_tool_name+"::RunStart failed to send ChangeConfig alert with payload '"+json_payload+"'";
     m_data->services->SendLog(errmsg, v_error);
@@ -324,14 +328,14 @@ std::string RunControl::RunStop(const char* key){
   if(!m_data->running) return "ERROR: Detector not running";
   if(*key!='N'){
     ///* commented out for fake data
-    bool ok = m_data->sc_vars.AlertSend("RunStop");
+       bool ok = m_data->sc_vars.AlertSend("RunStop");
     if(!ok){
       std::string errmsg = "ERROR "+m_tool_name+"::RunStop failed to send RunStop alert";
       m_data->services->SendLog(errmsg, v_error);
       m_data->services->SendAlarm(errmsg);
       return errmsg;
     }
-   
+    
     //    m_data->running=false;
     m_run_stop=true;
   }

@@ -37,11 +37,15 @@ bool LED::Execute(){
 			std::string json = BuildLedJson(0,sequence_repetitions,
 			                   thread_args->last_beamspill_counts, thread_args->last_flash_counts);
 			Log("Sending terminating LED alert to MPMTs with content '"+json+"'",v_debug,m_verbose);
-			bool ok = m_data->services->AlertSend("LED", json);
+			bool ok = m_data->services->AlertSend("LEDTrigger", json);
 			if(!ok){
 				std::cerr<<"LED::Execute AlertSend returned false! "<<std::endl;
 				return false; // FIXME keep trying?
 			}
+			
+			// also send a SlowControl command to all MPMTs to power down LED subsystem
+			SendGroupCommand("MPMT","ManualDisableLEDSubsystem","1");
+			
 		}
 		last_running=false;
 	} else if(!last_running && m_data->led_trigger){
@@ -207,8 +211,9 @@ void LED::Thread(Thread_args* arg){
 	// if requested, also send software trigger alert to acquire data around this LED flash
 	if(p.m_data->software_trigger){
 		// did i say software trigger alert? I meant one for each MPMT, because they all have different clock offsets.
-		for(unsigned int i=0; i<(sizeof(p.m_data->time_corrections)/sizeof(p.m_data->time_corrections[0])); ++i){
-			json = p.BuildSWTriggerJson(i, m_args->last_flash_counts);
+		for(size_t i=0; i<p.mpmt_ids.size(); ++i){
+			unsigned int mpmti = p.mpmt_ids.at(i);
+			json = p.BuildSWTriggerJson(mpmti, m_args->last_flash_counts);
 			ok = p.m_data->services->AlertSend("SoftTrigger", json);
 			if(!ok){
 				std::cerr<<"LED::Thread SWTrigger AlertSend returned false! "<<std::endl;
@@ -352,6 +357,30 @@ bool LED::LoadConfig(){
 	// e.g. to avoid overlap with beam: (time between alert send and MPMT flash sequence start) + flashing duration must be < 0.2s
 	// The first term here is not just WaitToStart, but WaitToStart + max_positive_error_on_coarse_counter_estimate
 	
+	//////////
+	
+	// for SW trigger alerts we can send an alert to just every MPMT
+	// or we can get the list of MPMT IDs in this run
+	std::string run_config_json;
+	if(m_data->services->GetRunConfig(run_config_json, m_data->run_configuration)){
+		std::cout<<"got run config string '"<<run_config_json<<"'"<<std::endl;
+		Store run_config_parser;
+		std::string tmp;
+		run_config_parser.JsonParser(run_config_json);
+		for(size_t i=0; i<(sizeof(m_data->time_corrections)/sizeof(m_data->time_corrections[0])); ++i){
+			if(run_config_parser.Get("MPMT"+std::to_string(i),tmp)) mpmt_ids.push_back(i);
+		}
+	}
+	std::cout<<"got "<<mpmt_ids.size()<<" MPMTs in this run: [";
+	for(auto& anid : mpmt_ids) std::cout<<anid << ",";
+	std::cout<<"]"<<std::endl;
+	if(mpmt_ids.size()==0){
+		Log("LoadConfig - no MPMTs in this run? Software triggers (if enabled) will be sent to all MPMTs in time_corrections",v_error,m_verbose);
+		// fall back to all MPMTs
+		mpmt_ids.resize(sizeof(m_data->time_corrections)/sizeof(m_data->time_corrections[0]));
+		std::iota(mpmt_ids.begin(), mpmt_ids.end(), 1); // start from 1, don't send SoftTrigger alert to MPMT0
+	}
+	
 	std::cout<<"LED Config Loaded"<<std::endl;
 	
 	return true;
@@ -432,6 +461,16 @@ bool LED::LoadSequence(){
 	int num_flashes, flash_interval;
 	alert_store.Get("NumFlashes",num_flashes);
 	alert_store.Get("FlashInterval",flash_interval);
+	
+	if(num_flashes>16777215){
+		Log("Error! LED sequence NumFlashes "+std::to_string(num_flashes)+" out of range, max value 16777215",v_error,m_verbose);
+		return false;
+	}
+	if(flash_interval>65535){
+		Log("Error! LED sequence FlashInterval "+std::to_string(flash_interval)+" out of range, max value 65535",v_error,m_verbose);
+		return false;
+	}
+	
 	sequence_period_counts = wait_to_start+(num_flashes*flash_interval);
 	std::cout<<"doing "<<num_flashes<<" flashes separated by "<<flash_interval<<" ticks, after initial delay of "<<wait_to_start<<" ticks, giving total "<<sequence_period_counts<<" ticks or "<<(sequence_period_counts*8)<<"ns between flash sequences"<<std::endl;
 	if((double(sequence_period_counts)*8)<1000){
@@ -465,6 +504,39 @@ bool LED::LoadSequence(){
 		// while retaining any others that already exist in the Store
 		//alert_store.JsonParser(sequence_vector.at(i));
 		tmp_store.JsonParser(sequence_vector.at(i));
+		
+		int led=0;
+		int dac=0;
+		int type=0;
+		int gain=0;
+		int ok=1;
+		ok = ok && tmp_store.Get("LED",led);
+		ok = ok && tmp_store.Get("DACSetting",dac);
+		ok = ok && tmp_store.Get("Gain",gain);
+		//ok = ok && tmp_store.Get("Type",type);  for now unused, may not be present i guess
+		if(!ok){
+			Log("Missing setting in LEDSequence! Entries should specify: LED, DACSetting, Gain, Type",v_error, m_verbose);
+			return false;
+		}
+		if(led>7){
+			Log("LED value "+std::to_string(led)+" out of range, max value 7",v_error,m_verbose);
+			return false;
+		}
+		if(gain>1){
+			Log("Gain value "+std::to_string(gain)+" out of range, this is boolean 0/1",v_error,m_verbose);
+			return false;
+		}
+		if(dac>1023){
+			Log("DACSetting value "+std::to_string(dac)+" out of range, max value 1023",v_error,m_verbose);
+			return false;
+		}
+		/*
+		// don't check this as firstly think it's currently unused, but liable also to change
+		if(type>1){
+			Log("Type value "+std::to_string(type)+" out of range, max value 1",v_error,m_verbose);
+			return false;
+		}
+		*/
 		
 		firing_sequence.at(i) = tmp_store; //alert_store;
 		
@@ -513,7 +585,7 @@ std::string LED::BuildLedJson(int sequence_num, int sequences_performed, unsigne
 		// so an MPMT attached to MCC 3 will have a 3*12 tick delay to its coarse counter.
 		// For this to align with MPMTs attached to MCC 0, shift the flash time forward appropriately
 		int MPMT_ID;
-		firing_sequence.at(sequence_num).Set("MPMTID", MPMT_ID);
+		firing_sequence.at(sequence_num).Get("MPMTID", MPMT_ID);
 		StartCounts -= m_data->time_corrections[MPMT_ID];
 		
 		firing_sequence.at(sequence_num).Set("StartTime", StartCounts);
@@ -547,7 +619,7 @@ std::string LED::BuildSWTriggerJson(unsigned int MPMT_ID, long unsigned int last
 	
 	// generate json for next alert
 	// most of it's already built during LoadSequence, we just need to update the StartCounts
-	unsigned long StartCounts = last_flash_counts - waveform_presamples - m_data->time_corrections[MPMT_ID];
+	unsigned long StartCounts = last_flash_counts - m_data->time_corrections[MPMT_ID] + led_advance_counts;  // - waveform_presamples < do not include these
 	SWTriggerAlertStore.Set("MPMTID", MPMT_ID);
 	SWTriggerAlertStore.Set("StartTime", StartCounts);
 	
@@ -555,6 +627,92 @@ std::string LED::BuildSWTriggerJson(unsigned int MPMT_ID, long unsigned int last
 	SWTriggerAlertStore >> json;
 	return json;
 }
+
+
+bool LED::SendGroupCommand(std::string Group, std::string Command, std::string Value, const unsigned int timeout){
+	
+	std::string cmd_json;
+	Store cmd_store;
+	cmd_store.Set("msg_type", "Command");
+	cmd_store.Set("msg_value",Command);  // control key
+	cmd_store.Set("var1",Value);         // control value
+	cmd_store>>cmd_json;
+	
+	// socket to connect to background ServiceDiscovery thread
+	zmq::socket_t sd(*m_data->context, ZMQ_DEALER);
+	sd.connect("inproc://ServiceDiscovery");
+	
+	// query SD for identified services
+	zmq::message_t send(4);
+	memcpy((void*)send.data(), "All", 4);
+	sd.send(send);
+	
+	// get response
+	zmq::message_t receive;
+	sd.recv(&receive);
+	std::istringstream iss(static_cast<char*>(receive.data()));
+	
+	// extract number of services
+	int size;
+	iss>>size;
+	
+	bool all_ok=true;
+	
+	Store service; // for holding details about each service
+	// loop over services
+	for(int i=0;i<size;i++){
+		
+		// get next zmq message part describing next service
+		zmq::message_t servicem;
+		sd.recv(&servicem);
+		
+		// this message contains JSON describing the service - parse it with a Store
+		std::istringstream ss(static_cast<char*>(servicem.data()));
+		service.JsonParser(ss.str());
+		
+		// skip if it's not in the group
+		std::string type;
+		service.Get("msg_value",type);
+		if(type.substr(0,Group.length()) != Group) continue;
+		
+		// get the service endpoint
+		std::string ip;
+		std::string remote_port;
+		service.Get("ip",ip);
+		service.Get("remote_port",remote_port);
+		std::string addr="tcp://"+ip+":"+remote_port;
+		
+		// make a REQ socket and connect to it
+		zmq::socket_t ServiceSend(*m_data->context, ZMQ_REQ);
+		ServiceSend.setsockopt(ZMQ_RCVTIMEO, timeout);
+		ServiceSend.setsockopt(ZMQ_SNDTIMEO, timeout);
+		ServiceSend.connect(addr.c_str());
+		
+		// send the command
+		zmq::message_t cmd(cmd_json.length());
+		memcpy((void*)cmd.data(), cmd_json.data(), cmd_json.size());
+		ServiceSend.send(cmd);
+		
+		// receive reply
+		zmq::message_t receive;
+		if(ServiceSend.recv(&receive)){
+			std::istringstream iss(static_cast<char*>(receive.data()));
+			std::string answer=iss.str();
+			Store rr;
+			rr.JsonParser(answer);
+			if(rr.Get<std::string>("msg_type")=="Command Reply"){
+				//std::cout<<"Got reply "<<rr.Get<std::string>("msg_value")<<std::endl;
+				if(rr.Get<std::string>("msg_value")!="OK") all_ok=false;
+			}
+		} else {
+			all_ok=false;
+		}
+		
+	} // end loop over services
+	
+	return all_ok;
+}
+
 
 /*
 // LED configuration JSON contents:

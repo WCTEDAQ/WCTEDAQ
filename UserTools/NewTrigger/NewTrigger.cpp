@@ -107,7 +107,6 @@ bool NewTrigger::Finalise(){
   delete m_data->mpmt_messages;
   m_data->mpmt_messages =0;
   m_data->mpmt_messages_mtx.unlock();
-
   
   return true;
 }
@@ -135,8 +134,8 @@ void NewTrigger::Thread(Thread_args* arg){
       to_remove.push_back(it);
       
       if(args->check_time.count(it->first)){
-	args->m_data->services->SendLog("ERROR Acumulation: there is late data to the acumulator" , v_error);
-	args->m_data->services->SendAlarm("ERROR Acumulation: there is late data to the acumulator" , v_error);
+	args->m_data->services->SendLog("ERROR Accumulation: there is late data to the accumulator" , v_error);
+	args->m_data->services->SendAlarm("ERROR Accumulation: there is late data to the accumulator" , v_error);
       }
       args->check_time[it->first]=true;
       if(args->check_time.size() > 200) args->check_time.clear();
@@ -148,21 +147,21 @@ void NewTrigger::Thread(Thread_args* arg){
   }
 
   if(args->m_data->data_chunks.size()){
-    //printf("macus:%u, ben:%u\n", args->m_data->data_chunks.rbegin()->first,  (args->m_data->current_coarse_counter >>23 ));
+    //printf("marcus:%u, ben:%u\n", args->m_data->data_chunks.rbegin()->first,  (args->m_data->current_coarse_counter >>23 ));
     args->m_data->monitoring_store_mtx.lock();
-    args->m_data->monitoring_store.Set("recevie_buffer_max_diff", args->m_data->data_chunks.rbegin()->first - (args->m_data->current_coarse_counter >>23 ));
+    args->m_data->monitoring_store.Set("receive_buffer_max_diff", args->m_data->data_chunks.rbegin()->first - (args->m_data->current_coarse_counter >>23 ));
     args->m_data->monitoring_store_mtx.unlock();
   }
   args->m_data->data_chunks_mtx.unlock();
 
-  ///////////////////// finnished getting data //////////////////////
+  ///////////////////// finished getting data //////////////////////
   
   if(local_data_chunks.size() == 0){
     //printf("d1\n");
     usleep(100);
     return;
   }
-
+  
   if(!args->m_data->nhits_trigger){
 
     //      printf("d2\n");
@@ -180,6 +179,11 @@ void NewTrigger::Thread(Thread_args* arg){
       if(it->second->triggers_info.size() || it->second->triggers.size() || has_data) printf("has data\n");
       else printf("no data!!!\n");
       */
+      
+      // FINDME
+      args->m_data->hitrates_mtx.lock();
+      memcpy(&(args->m_data->hitrates[it->first][0]), &(it->second->hitcounts[0]), (sizeof(unsigned int)*132));
+      args->m_data->hitrates_mtx.unlock();
       
       if(args->m_data->out_data_chunks->count(it->first)){
 	//send log
@@ -230,7 +234,7 @@ void NewTrigger::Thread(Thread_args* arg){
       it->second=0;
       //printf("d5 size=%d\n",args->triggers.size());
       
-      tmp_job->func=NhitsJob;
+      tmp_job->func=NhitsJob2;
       tmp_job->data=tmp_args;
       //printf("d6.2 pointerin=%p\n", tmp_args);
       if(args->m_data->running) args->m_data->job_queue.AddJob(tmp_job);
@@ -313,7 +317,7 @@ void NewTrigger::LoadConfig(){
   
   if(!m_variables.Get("nhits_threshold", args->nhits_threshold)) args->nhits_threshold=20;
   if(!m_variables.Get("nhits_jump", args->nhits_jump)) args->nhits_jump=25;
-  if(!m_variables.Get("nhits_windos_sizs", args->nhits_window_size)) args->nhits_window_size=25;
+  if(!m_variables.Get("nhits_windows_size", args->nhits_window_size)) args->nhits_window_size=25;
   if(!m_variables.Get("nhits_bit_shift", args->nhits_bit_shift)) args->nhits_bit_shift=15;
   //bool Laser=false;
   //bool none=false;
@@ -348,30 +352,37 @@ bool NewTrigger::NhitsJob(void* data){
  unsigned short* hit_sum = new unsigned short[bins+1];
  *hit_sum = { 0 };
  //printf("d2\n");
+ // unsigned int sum=0;
  
  for(unsigned int i=0; i< args->mpmt_collection->mpmt_output.size(); i++){
    for(unsigned int j=0; j< args->mpmt_collection->mpmt_output.at(i)->hits.size(); j++){
 
      //     hit_sum[args->mpmt_collection->mpmt_output.at(i)->hits.at(j).hit->GetCoarseCounter() - (args->bin <<23)]++;
 
-     hit_sum[((args->m_data->time_corrections[args->mpmt_collection->mpmt_output.at(i)->hits.at(j).card_id]) + args->mpmt_collection->mpmt_output.at(i)->hits.at(j).hit->GetCoarseCounter()) >> args->nhits_bit_shift ];
+     hit_sum[((args->m_data->time_corrections[args->mpmt_collection->mpmt_output.at(i)->hits.at(j).card_id]) + args->mpmt_collection->mpmt_output.at(i)->hits.at(j).hit->GetCoarseCounter()) >> args->nhits_bit_shift ]++;
+     // sum++;
    }
  }
- //printf("d3\n");
- for (unsigned int i= 1 ; i <bins; i++){
-   hit_sum[i]+= hit_sum[i-1];
- }
-  //printf("d4\n");
- for (unsigned int i= args->nhits_window_size; i<bins; i++){
-   if(hit_sum[i]-hit_sum[i-args->nhits_window_size] > args->nhits_threshold){
-     TriggerInfo* tmp = new TriggerInfo;
-     tmp->type= TriggerType::NHITS;
-     tmp->time= i + (args->bin <<7);
-     args->mpmt_collection->triggers_info.push_back(tmp);
-     i+=args->nhits_jump;
-   }
 
- }
+ 
+ 
+ // printf("d3 %u\n",sum);
+ //if(sum!=0){
+   for (unsigned int i= 1 ; i <bins+1; i++){
+     hit_sum[i]+= hit_sum[i-1];
+   }
+   //printf("d4 %u\n",hit_sum[bins]);
+   for (unsigned int i= args->nhits_window_size; i<bins; i++){
+     if(hit_sum[i]-hit_sum[i-args->nhits_window_size] > args->nhits_threshold){
+       TriggerInfo* tmp = new TriggerInfo;
+       tmp->type= TriggerType::NHITS;
+       tmp->time= i + (args->bin <<7);
+       args->mpmt_collection->triggers_info.push_back(tmp);
+       i+=args->nhits_jump;
+     }
+     
+   }
+   //}
  //printf("d5\n");
  //put into buffer
  
@@ -397,6 +408,74 @@ bool NewTrigger::NhitsJob(void* data){
  //printf("d7\n");
  
  delete[] hit_sum;
+ 
+ return true;
+ 
+}
+
+bool NewTrigger::NhitsJob2(void* data){
+
+ NewTrigger_args* args=reinterpret_cast<NewTrigger_args*>(data);
+
+ //printf("d1\n");
+ // unsigned short* hit_sum = new unsigned short[8388608];
+ unsigned int bins = pow(2,32 - args->nhits_bit_shift) -1;
+ unsigned short* hit_sum = new unsigned short[bins+1]{0};
+ // *hit_sum = { 0 };
+ //printf("d2\n");
+ std::unordered_map <unsigned long, bool> trigger_times;
+
+ 
+ for(unsigned int i=0; i< args->mpmt_collection->mpmt_output.size(); i++){
+   for(unsigned int j=0; j< args->mpmt_collection->mpmt_output.at(i)->hits.size(); j++){
+
+     //     hit_sum[args->mpmt_collection->mpmt_output.at(i)->hits.at(j).hit->GetCoarseCounter() - (args->bin <<23)]++;
+     unsigned int bin = ((args->m_data->time_corrections[args->mpmt_collection->mpmt_output.at(i)->hits.at(j).card_id]) + args->mpmt_collection->mpmt_output.at(i)->hits.at(j).hit->GetCoarseCounter()) >> args->nhits_bit_shift;
+
+     hit_sum[bin]++;
+     if(trigger_times.count(bin)) continue;
+     if(bin==0) bin++;
+     //     else if(bin==bins) bin--;
+     if( (hit_sum[bin] + hit_sum[bin-1])>  args->nhits_threshold){
+       for(size_t index=0; index< args->nhits_jump; index++){
+	 trigger_times[bin+index]=true;
+       }
+       TriggerInfo* tmp = new TriggerInfo;
+       tmp->type= TriggerType::NHITS;
+       
+       tmp->time= (((unsigned long)(args->bin & 33553920U))<< 23) | ((args->m_data->time_corrections[args->mpmt_collection->mpmt_output.at(i)->hits.at(j).card_id]) + args->mpmt_collection->mpmt_output.at(i)->hits.at(j).hit->GetCoarseCounter()); 
+	 //   tmp->time= bin + (args->bin <<7);
+       args->mpmt_collection->triggers_info.push_back(tmp);
+       
+     }
+   }
+ }
+ 
+ 
+ args->m_data->out_data_chunks_mtx.lock();
+ if(args->m_data->out_data_chunks->count(args->bin)){
+   //send log
+   //  printf("there is late data from nhits\n");
+   /*   (*args->m_data->out_data_chunks)[args->bin]->mpmt_output.insert((*args->m_data->out_data_chunks)[args->bin]->mpmt_output.end(), it->second->mpmt_output.begin(), it->second->mpmt_output.end());
+	(*args->m_data->out_data_chunks)[args->bin]->triggers_info.insert((*args->m_data->out_data_chunks)[args->bin]->triggers_info.end(), it->second->triggers_info.begin(), it->second->triggers_info.end());
+	(*args->m_data->out_data_chunks)[args->bin]->triggers.insert((*args->m_data->out_data_chunks)[args->bin]->triggers.end(), it->second->triggers.begin(), it->second->triggers.end());
+   */
+   delete args->mpmt_collection;
+   args->mpmt_collection=0;
+ }
+ 
+ else{
+   //printf("d6\n");
+   (*args->m_data->out_data_chunks)[args->bin]=args->mpmt_collection;
+   args->mpmt_collection=0;
+ }
+ 
+ args->m_data->out_data_chunks_mtx.unlock();
+ //printf("d7\n");
+ 
+ delete[] hit_sum;
+ delete args;
+ args=0;
  
  return true;
  

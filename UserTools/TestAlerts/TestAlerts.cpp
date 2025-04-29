@@ -69,8 +69,9 @@ bool TestAlerts::LoadConfig(){
 void TestAlerts::AlertReceive(const char* alert_name, const char* alert_payload){
 	
 	boost::posix_time::ptime now = boost::posix_time::microsec_clock::universal_time();
-	out_file << now << " " << alert_name << " " << alert_payload << std::endl;
-	if(verb>3) std::clog<<"TestAlerts received '"<<alert_name<<"' at "<<boost::posix_time::to_simple_string(now)<<" with payload '"<<alert_payload<<"'"<<std::endl;
+	out_file << now << " " << /*m_data->coarse_counts << " " << */ alert_name << " " << alert_payload << std::endl;
+	if(verb>3) std::clog<<"TestAlerts received '"<<alert_name<<"' at "<<boost::posix_time::to_simple_string(now) 
+	                  /*<<", coarse counter "<<m_data->coarse_counter*/ << ", with payload '"<<alert_payload<<"'"<<std::endl;
 	
 	return;
 }

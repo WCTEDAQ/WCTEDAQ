@@ -57,6 +57,7 @@ class NewTrigger: public Tool {
   void LoadConfig();  
   static void Thread(Thread_args* arg); ///< Function to be run by the thread in a loop. Make sure not to block in it
   static bool NhitsJob(void* data);
+  static bool NhitsJob2(void* data);
   Utilities* m_util;  ///< Pointer to utilities class to help with threading
   NewTrigger_args* args; ///< thread args (also holds pointer to the thread)
   Store main_vars;

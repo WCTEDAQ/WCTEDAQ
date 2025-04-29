@@ -158,8 +158,8 @@ void NewWindowBuilder::Thread(Thread_args* arg){
 	}
 	
       }
-							       
-  */							       
+	
+  */
 
   for( std::map<unsigned int, MPMTCollection*>::iterator it= local_out_data_chunks->begin(); it!= local_out_data_chunks->end(); it++){
   
@@ -171,6 +171,10 @@ void NewWindowBuilder::Thread(Thread_args* arg){
     job_args->pre_trigger = &args->pre_trigger;
     job_args->post_trigger = &args->post_trigger;
     job_args->offset_trigger = &args->offset_trigger;
+    job_args->downsample_trigger = &args->downsample_trigger;
+    job_args->trigger_counts = &args->trigger_counts;
+    job_args->trigger_counts_mtx = &args->trigger_counts_mtx;
+    
       /*
       job_args->pre_cluster=pre_cluster;
       job_args->post_cluster=post_cluster;
@@ -522,6 +526,9 @@ void NewWindowBuilder::LoadConfig(){
     args->pre_trigger.clear();
     args->post_trigger.clear();
     args->offset_trigger.clear();
+    args->downsample_trigger.clear();
+    args->trigger_counts.clear();
+    args->trigger_counts_mtx.clear();
     /*    
     bool beamelec=false;
     unsigned long beamelec_pre_trigger=0;
@@ -557,10 +564,12 @@ void NewWindowBuilder::LoadConfig(){
     unsigned long led_pre_trigger=0;
     unsigned long led_post_trigger=0;
     long led_offset_trigger=0;
+    unsigned int led_downsample=0;
     m_variables.Get("led", led);
     m_variables.Get("led_pre_trigger", led_pre_trigger);
     m_variables.Get("led_post_trigger", led_post_trigger);
     m_variables.Get("led_offset_trigger", led_offset_trigger);
+    m_variables.Get("led_downsample", led_downsample);
     /*
     led=true;
     led_pre_trigger = 12500;
@@ -571,16 +580,21 @@ void NewWindowBuilder::LoadConfig(){
       args->pre_trigger[TriggerType::LED]=led_pre_trigger;
       args->post_trigger[TriggerType::LED]=led_post_trigger;
       args->offset_trigger[TriggerType::LED]=led_offset_trigger;
+      args->downsample_trigger[TriggerType::LED]=led_downsample;
+      args->trigger_counts[TriggerType::LED]=0;
+      args->trigger_counts_mtx[TriggerType::LED];
     }
     
       bool laser=false;
       unsigned long laser_pre_trigger=0;
       unsigned long laser_post_trigger=0;
       long laser_offset_trigger=0;
+      unsigned int laser_downsample=0;
       m_variables.Get("laser", laser);
       m_variables.Get("laser_pre_trigger", laser_pre_trigger);
       m_variables.Get("laser_post_trigger", laser_post_trigger);
       m_variables.Get("laser_offset_trigger", laser_offset_trigger);
+      m_variables.Get("laser_downsample", laser_downsample);
       /*
       laser=true;
       laser_pre_trigger = 1500;
@@ -593,6 +607,9 @@ void NewWindowBuilder::LoadConfig(){
       args->pre_trigger[TriggerType::LASER]=laser_pre_trigger;
       args->post_trigger[TriggerType::LASER]=laser_post_trigger;
       args->offset_trigger[TriggerType::LASER]=laser_offset_trigger;
+      args->downsample_trigger[TriggerType::LASER]=laser_downsample;
+      args->trigger_counts[TriggerType::LASER]=0;
+      args->trigger_counts_mtx[TriggerType::LASER];
       }
       /*  
       bool none=false;
@@ -614,10 +631,12 @@ void NewWindowBuilder::LoadConfig(){
     unsigned long nhits_pre_trigger=0;
     unsigned long nhits_post_trigger=0;
     long nhits_offset_trigger=0;
+    unsigned int nhits_downsample=0;
     m_variables.Get("nhits", nhits);
     m_variables.Get("nhits_pre_trigger", nhits_pre_trigger);
     m_variables.Get("nhits_post_trigger", nhits_post_trigger);
     m_variables.Get("nhits_offset_trigger", nhits_offset_trigger);
+    m_variables.Get("nhits_downsample", nhits_downsample);
 
     /*
       nhits=true;
@@ -630,6 +649,9 @@ void NewWindowBuilder::LoadConfig(){
       args->pre_trigger[TriggerType::NHITS]=nhits_pre_trigger;
       args->post_trigger[TriggerType::NHITS]=nhits_post_trigger;
       args->offset_trigger[TriggerType::NHITS]=nhits_offset_trigger;
+      args->downsample_trigger[TriggerType::NHITS]=nhits_downsample;
+      args->trigger_counts[TriggerType::NHITS]=0;
+      args->trigger_counts_mtx[TriggerType::NHITS];
     }
     /*
       bool hard6=false;
@@ -651,10 +673,12 @@ void NewWindowBuilder::LoadConfig(){
     unsigned long main_pre_trigger=0;
     unsigned long main_post_trigger=0;
     long main_offset_trigger=0;
+    unsigned int main_downsample=0;
     m_variables.Get("main", main);
     m_variables.Get("main_pre_trigger", main_pre_trigger);
     m_variables.Get("main_post_trigger", main_post_trigger);
     m_variables.Get("main_offset_trigger", main_offset_trigger);
+    m_variables.Get("main_downsample", main_downsample);
 
     /*
     main=true;
@@ -667,6 +691,9 @@ void NewWindowBuilder::LoadConfig(){
       args->pre_trigger[TriggerType::MAIN]=main_pre_trigger;
       args->post_trigger[TriggerType::MAIN]=main_post_trigger;
       args->offset_trigger[TriggerType::MAIN]=main_offset_trigger;
+      args->downsample_trigger[TriggerType::MAIN]=main_downsample;
+      args->trigger_counts[TriggerType::MAIN]=0;
+      args->trigger_counts_mtx[TriggerType::MAIN];
     }
     
 }
@@ -681,11 +708,16 @@ bool NewWindowBuilder::BuildWindow(void* data){
    
    tmp->mpmt_collection=args->mpmt_collection;
    tmp->triggers_info=&args->mpmt_collection->triggers_info;
-   tmp->start_counter=args->header_coarse_counter;
+   //tmp->start_counter=args->header_coarse_counter;
+   tmp->start_counter=0;
+   if(args->mpmt_collection->triggers_info.size())tmp->start_counter=args->mpmt_collection->triggers_info.at(0)->time;
+   args->data->readout_num_mtx.lock();
    tmp->readout_num=args->data->readout_num;
    args->data->readout_num++;
+   args->data->readout_num_mtx.unlock();
    //tmp->leds=&args->mpmt_collection->leds;
    tmp->trigger_hits=&args->mpmt_collection->triggers;
+  
 
    for(unsigned int i=0; i < args->mpmt_collection->mpmt_output.size(); i++){
 
@@ -776,7 +808,15 @@ bool NewWindowBuilder::BuildWindow(void* data){
      }
      */
      
-     
+     // downsample triggers - omit building window except for every Nth trigger of a given type
+     if((*args->downsample_trigger)[args->mpmt_collection->triggers_info.at(i)->type] != 0){
+       (*args->trigger_counts_mtx)[args->mpmt_collection->triggers_info.at(i)->type].lock();
+       unsigned long n_trgs = (*args->trigger_counts)[args->mpmt_collection->triggers_info.at(i)->type]++;
+       (*args->trigger_counts_mtx)[args->mpmt_collection->triggers_info.at(i)->type].unlock();
+       if( (n_trgs % (*args->downsample_trigger)[args->mpmt_collection->triggers_info.at(i)->type]) != 0){
+         continue;
+       }
+     }
      unsigned long time = args->mpmt_collection->triggers_info.at(i)->time + (*args->offset_trigger)[args->mpmt_collection->triggers_info.at(i)->type];
      unsigned long pre_trigger = (*args->pre_trigger)[args->mpmt_collection->triggers_info.at(i)->type];
      unsigned long post_trigger = (*args->post_trigger)[args->mpmt_collection->triggers_info.at(i)->type];
@@ -788,13 +828,15 @@ bool NewWindowBuilder::BuildWindow(void* data){
      tmp->mpmt_collection=0;
      //     tmp->mpmt_collection=args->mpmt_collection;
      //     tmp->triggers_info=&args->mpmt_collection->triggers_info;
-     
+     tmp->spill_num=args->mpmt_collection->triggers_info.at(i)->spill_num;    
      
      tmp->triggers_info = new std::vector<TriggerInfo*>;
      tmp->triggers_info->push_back(args->mpmt_collection->triggers_info.at(i));
-     tmp->start_counter=args->header_coarse_counter;
+     tmp->start_counter=time-pre_trigger;
+     args->data->readout_num_mtx.lock();
      tmp->readout_num=args->data->readout_num;
      args->data->readout_num++;
+     args->data->readout_num_mtx.unlock();
      //tmp->leds=&args->mpmt_collection->leds;
      
      tmp->trigger_hits = new std::vector<P_MPMTHit*>;
@@ -857,10 +899,12 @@ bool NewWindowBuilder::BuildWindow(void* data){
        
        
      }
+
      
      readout_windows.push_back(tmp); 
      
    }
+
    if(readout_windows.size()) readout_windows.back()->mpmt_collection=args->mpmt_collection;
    
    
@@ -949,7 +993,7 @@ bool NewWindowBuilder::BuildWindow(void* data){
 
 
 bool NewWindowBuilder::BuildWindow2(void* data){
-  /*
+  
  BuildWindow_args* args=reinterpret_cast<BuildWindow_args*>(data);
 
  std::vector<PReadoutWindow*> readout_windows;
@@ -1002,18 +1046,18 @@ bool NewWindowBuilder::BuildWindow2(void* data){
  if(!args->data->hardware_trigger){
 
 
-   unsigned short a* = new unsigned short[65536];
-   unsigned short b* = new usngined short[65536];
+   unsigned int* a = new unsigned int[65536];
+   unsigned int* b = new unsigned int[65536];
    std::vector<P_MPMTHit*> mpmt_hits;
-   std::vector<P_MPMTWaveformHeader*> mpmt_waveforms;
    std::vector<P_MPMTHit*> mpmt_hits2;
+   std::vector<P_MPMTWaveformHeader*> mpmt_waveforms;
    std::vector<P_MPMTWaveformHeader*> mpmt_waveforms2;
    
    
    for(unsigned int i=0; i < args->mpmt_collection->mpmt_output.size(); i++){
      
-     mpmt_hits.reserve(tmp->mpmt_hits.size() + args->mpmt_collection->mpmt_output.at(i)->hits.size());
-     mpmt_waveforms.reserve(tmp->mpmt_waveforms.size() + args->mpmt_collection->mpmt_output.at(i)->waveforms.size()); 
+     mpmt_hits.reserve(mpmt_hits.size() + args->mpmt_collection->mpmt_output.at(i)->hits.size());
+     mpmt_waveforms.reserve(mpmt_waveforms.size() + args->mpmt_collection->mpmt_output.at(i)->waveforms.size()); 
 
      for(unsigned int j=0; j< args->mpmt_collection->mpmt_output.at(i)->hits.size(); j++){
        mpmt_hits.push_back(&args->mpmt_collection->mpmt_output.at(i)->hits.at(j));
@@ -1033,22 +1077,23 @@ bool NewWindowBuilder::BuildWindow2(void* data){
      b[i]+=b[i-1];
    }
 
+   
+   
    //do triggers;
    
-   tmp->mpmt_hits.resize(mpmt_hits.size());
+   mpmt_hits2.resize(mpmt_hits.size());
    for(unsigned int i=0; i< mpmt_hits.size(); i++){
-     tmp->mpmt_hits.at(a[(mpmt_hits.at(i)->hit->GetCoarseCounter() & 8388607) >>7]-1) = mpmt_hits.at(i);
+     mpmt_hits2.at(a[(mpmt_hits.at(i)->hit->GetCoarseCounter() & 8388607) >>7]-1) = mpmt_hits.at(i);
      a[(mpmt_hits.at(i)->hit->GetCoarseCounter() & 8388607) >>7]--;
    }
    mpmt_hits.clear();
 
-   tmp->mpmt_hits.resize(mpmt_hits.size());
+   mpmt_waveforms2.resize(mpmt_waveforms.size());
    for(unsigned int i=0; i<  mpmt_waveforms.size(); i++){
-     tmp->mpmt_waveforms.at(a[(mpmt_waveforms.at(i)->waveform_header->GetCoarseCounter() & 8388607) >>7]-1) = mpmt_waveforms.at(i);
+     mpmt_waveforms2.at(a[(mpmt_waveforms.at(i)->waveform_header->GetCoarseCounter() & 8388607) >>7]-1) = mpmt_waveforms.at(i);
      b[(mpmt_waveforms.at(i)->waveform_header->GetCoarseCounter() & 8388607) >>7]--;
    }
    mpmt_waveforms.clear();
-
 
    
    //   printf("d4\n");
@@ -1107,26 +1152,26 @@ bool NewWindowBuilder::BuildWindow2(void* data){
        printf("type = ???\n");
      }
    
-     
+     */
      
      unsigned long time = args->mpmt_collection->triggers_info.at(i)->time + (*args->offset_trigger)[args->mpmt_collection->triggers_info.at(i)->type];
      unsigned long pre_trigger = (*args->pre_trigger)[args->mpmt_collection->triggers_info.at(i)->type];
      unsigned long post_trigger = (*args->post_trigger)[args->mpmt_collection->triggers_info.at(i)->type];
 
-     //     printf("time=%lu, pre_trigger=%lu, post_trigger=%lu\n", time, pre_trigger, post_trigger);
-     
      PReadoutWindow* tmp= new PReadoutWindow;
      
      tmp->mpmt_collection=0;
      //     tmp->mpmt_collection=args->mpmt_collection;
      //     tmp->triggers_info=&args->mpmt_collection->triggers_info;
-     
+     tmp->spill_num=args->mpmt_collection->triggers_info.at(i)->spill_num;    
      
      tmp->triggers_info = new std::vector<TriggerInfo*>;
      tmp->triggers_info->push_back(args->mpmt_collection->triggers_info.at(i));
-     tmp->start_counter=args->header_coarse_counter;
+     tmp->start_counter=time-pre_trigger;
+     args->data->readout_num_mtx.lock();
      tmp->readout_num=args->data->readout_num;
      args->data->readout_num++;
+     args->data->readout_num_mtx.unlock();
      //tmp->leds=&args->mpmt_collection->leds;
      
      tmp->trigger_hits = new std::vector<P_MPMTHit*>;
@@ -1157,51 +1202,47 @@ bool NewWindowBuilder::BuildWindow2(void* data){
      for(unsigned int j=0; j<args->mpmt_collection->triggers.size(); j++){
        //printf("j=%u, time=%u , triggers.time=%u\n", j, time,args->mpmt_collection->triggers.at(j)->hit->GetCoarseCounter());
 
-       if(!slow && args->mpmt_collection->triggers.at(j)->hit->GetCoarseCounter() > post_time) break; 
+       //       if(!slow && args->mpmt_collection->triggers.at(j)->hit->GetCoarseCounter() > post_time) break; 
        if(args->mpmt_collection->triggers.at(j)->hit->GetCoarseCounter() > pre_time && args->mpmt_collection->triggers.at(j)->hit->GetCoarseCounter() < post_time ){
 	 tmp->trigger_hits->push_back(args->mpmt_collection->triggers.at(j));
 	 
        }
      }
 
-   
-     //  printf("d7 mpmt_output.size()=%u\n", args->mpmt_collection->mpmt_output.size());
-     for(unsigned int k=0; k< args->mpmt_collection->mpmt_output.size(); k++){
-       DAQHeader* daq_header=reinterpret_cast<DAQHeader*>(args->mpmt_collection->mpmt_output.at(k)->daq_header.data());
-       //printf("d8 hits.size()=%u, cardid=%u\n", args->mpmt_collection->mpmt_output.at(k)->hits.size(), daq_header->GetCardID());
-       for(unsigned int j=0; j< args->mpmt_collection->mpmt_output.at(k)->hits.size(); j++){
-	 //printf("j=%u, time=%lu , hits.time=%u\n", j, time, args->mpmt_collection->mpmt_output.at(k)->hits.at(j).hit->GetCoarseCounter());
-
-	 if(!slow && args->mpmt_collection->mpmt_output.at(k)->hits.at(j).hit->GetCoarseCounter() > post_time) break;
-	 if(args->mpmt_collection->mpmt_output.at(k)->hits.at(j).hit->GetCoarseCounter() > pre_time && args->mpmt_collection->mpmt_output.at(k)->hits.at(j).hit->GetCoarseCounter() < post_time){
-	   tmp->mpmt_hits.push_back(&args->mpmt_collection->mpmt_output.at(k)->hits.at(j));
-	 }
+     
+     
+     for(unsigned int i= a[(pre_time & 8388607) >>7] ; i < a[((post_time & 8388607) >>7)+1]; i++){ // this will crash if in very last bin 
+       if(mpmt_hits2.at(i)->hit->GetCoarseCounter() > pre_time && mpmt_hits2.at(i)->hit->GetCoarseCounter() < post_time){
+	 tmp->mpmt_hits.push_back(mpmt_hits2.at(i));
        }
-       
-       //printf("d9 waveforms.size()=%u\n", args->mpmt_collection->mpmt_output.at(k)->waveforms.size());
-       for(unsigned int j=0; j< args->mpmt_collection->mpmt_output.at(k)->waveforms.size(); j++){
-	 //printf("j=%u, time=%u , waveforms.time=%u\n",j, time, args->mpmt_collection->mpmt_output.at(k)->waveforms.at(j).waveform_header->GetCoarseCounter());
-	 if(!slow && args->mpmt_collection->mpmt_output.at(k)->waveforms.at(j).waveform_header->GetCoarseCounter() > post_time) break;
-	 if(args->mpmt_collection->mpmt_output.at(k)->waveforms.at(j).waveform_header->GetCoarseCounter() > pre_time && args->mpmt_collection->mpmt_output.at(k)->waveforms.at(j).waveform_header->GetCoarseCounter() < post_time){
-	   tmp->mpmt_waveforms.push_back(&args->mpmt_collection->mpmt_output.at(k)->waveforms.at(j));
-	 }
+     }
+     
+     for(unsigned int i= b[(pre_time & 8388607) >>7] ; i < b[((post_time & 8388607) >>7)+1]; i++){ 
+       if(mpmt_waveforms2.at(i)->waveform_header->GetCoarseCounter() > pre_time && mpmt_waveforms2.at(i)->waveform_header->GetCoarseCounter() < post_time){
+	 tmp->mpmt_waveforms.push_back(mpmt_waveforms2.at(i));
        }
-       
-       
      }
      
      readout_windows.push_back(tmp); 
      
    }
+
+   delete a;
+   a=0;
+   delete b;
+   b=0;
+   mpmt_hits2.clear();
+   mpmt_waveforms2.clear();
+   
    if(readout_windows.size()) readout_windows.back()->mpmt_collection=args->mpmt_collection;
+ 
    
-   
- }
+}
  
  // if( readout_windows.size()) printf("windows size=%u\n",readout_windows.size()); 
   //printf("d10\n");
 
- 
+
  if(readout_windows.size()){
     //printf("d11\n");
    //printf("d5\n");
@@ -1216,13 +1257,13 @@ bool NewWindowBuilder::BuildWindow2(void* data){
    
    args->data->preadout_windows->insert(args->data->preadout_windows->end(), readout_windows.begin(), readout_windows.end());
 
-   /*   
+   /*         
      for(unsigned int i=0; i<args->data->preadout_windows->size(); i++){
      delete args->data->preadout_windows->at(i);
      args->data->preadout_windows->at(i)=0;
      }
      args->data->preadout_windows->clear();
-   
+   */
    
    args->data->preadout_windows_mtx.unlock();
    //printf("x2\n");
@@ -1232,15 +1273,50 @@ bool NewWindowBuilder::BuildWindow2(void* data){
    args->mpmt_collection = 0;
 
  }
+  //printf("d12\n");
+ // for (int i=0; i<args->triggered_data.size(); i++){
+ // printf("u1 Pre,post,size %d,%d,%u\n",args->pre_cluster,args->post_cluster,args->triggered_data.size());
 
+ /*if(args->pre_cluster){
+   printf("u1.1\n");
+    delete args->triggered_data.at(0);
+    printf("u1.2\n");
+   args->triggered_data.at(0)=0;
+   printf("u1.3\n");
+   }
+   printf("u1.5\n");
+   if(!args->post_cluster){
+   printf("u1.6\n");
+   delete args->triggered_data.at(args->triggered_data.size()-1);
+   printf("u1.7\n");
+   args->triggered_data.at(args->triggered_data.size()-1)=0;
+   printf("u1.8\n");
+   }
+ */
+ //printf("u2\n");
+ //args->triggered_data.clear();
+ //printf("u2.1\n");
+ /* 
+    for (int i=0; i<args->merged_triggers.size(); i++){
+    for (int j=0; j<args->merged_triggers.at(i).size(); j++){
+    printf("u3\n");
+    delete args->merged_triggers.at(i).at(j);
+    printf("u4\n");
+    }
+    args->merged_triggers.at(i).clear();
+    }
+    args->merged_triggers.clear();
+ */
  args->data=0;
  //printf("u5\n");
  delete args;
  //printf("u6\n");
  args=0;
-*/ 
+ 
  return true;
  
  
 }
+
+
 

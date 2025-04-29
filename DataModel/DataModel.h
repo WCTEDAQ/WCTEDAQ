@@ -100,7 +100,13 @@ public:
 
   std::mutex monitoring_store_mtx;
   Store monitoring_store;
-  std::map<std::string, unsigned int> hit_map;
+  std::mutex monitoring_stream_mtx;
+  Store monitoring_stream;
+  std::map<std::string, unsigned int> hit_map; // MPMT card ID to number of messages received
+  
+  std::map<unsigned int, unsigned int[132]> hitrates; // time bin to number of hits on each MPMT
+  std::mutex hitrates_mtx;
+  
   unsigned int qtc_transfer_num;
   unsigned int adc_transfer_num;
 
@@ -113,6 +119,7 @@ public:
   unsigned long spill_num;
   unsigned long vme_event_num;
   unsigned long readout_num;
+  std::mutex readout_num_mtx;
   unsigned long beam_warn_coarse_counts;
 
   bool raw_readout;
@@ -139,6 +146,9 @@ public:
   
   std::mutex pps_mtx;
   std::vector<WCTEMPMTPPS>* pps;
+  
+  std::mutex mon_pps_mtx;
+  std::vector<WCTEMPMTPPS>* mon_pps;
 
   std::mutex mpmt_messages_mtx;
   std::vector<MPMTMessage*>* mpmt_messages;
@@ -153,7 +163,6 @@ private:
   // We need to subscribe V1290 and V792 to the beam spill alert, but ToolDAQ
   // does not support multiple receivers on an alert.
   std::unordered_map<std::string, std::list<ToolFramework::AlertFunction>> alerts;
-  
   
   //std::map<std::string,TTree*> m_trees; 
   

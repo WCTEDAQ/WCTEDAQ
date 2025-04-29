@@ -13,5 +13,5 @@ WindowBuilder NewWindowBuilder Null
 Monitoring Monitoring Null
 #FileWriter FileWriter Null
 RootWriter RootWriter Null
-#LED LED configfiles/RBU2/LEDConfig
-#TestAlerts TestAlerts configfiles/RBU2/TestAlertsConfig
+LED LED configfiles/RBU2/LEDConfig
+TestAlerts TestAlerts configfiles/RBU2/TestAlertsConfig

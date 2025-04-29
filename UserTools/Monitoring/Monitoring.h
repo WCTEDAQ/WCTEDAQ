@@ -32,6 +32,7 @@ struct Monitoring_args:Thread_args{
   Store hit_rates;
   DataModel* data;
   zmq::socket_t* sock;
+  std::vector<WCTEMPMTPPS>* pps;
 
 };
 

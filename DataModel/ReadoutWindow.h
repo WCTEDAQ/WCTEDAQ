@@ -94,7 +94,8 @@ public:
   std::vector<QDCHit*> qdc_hits;
   unsigned long start_counter;
   unsigned long readout_num;
-
+  unsigned long spill_num;
+  
 #ifndef __CLING__
   MPMTCollection* mpmt_collection;
 #else
@@ -185,7 +186,9 @@ public:
 #ifndef __CLING__
   bool Serialise(BinaryStream &bs){
     // std::cout<<"readout window serialise"<<std::endl;
- 
+
+    bs & spill_num;
+    
     unsigned int size = 0;
     
     if(bs.m_write){
@@ -273,6 +276,11 @@ std::cout<<"read waveforms"<<std::endl;
 
  void Send(zmq::socket_t* sock, int flag=0){
    if(mpmt_hits.size() !=0){
+     std::string identifier="RW";
+     zmq::message_t identifier_msg(identifier.length()+1);
+     memcpy(identifier_msg.data(), identifier.data(), identifier.length()+1);
+     sock->send(identifier_msg, ZMQ_SNDMORE);
+     
      unsigned int tmp_size = mpmt_hits.size();
      zmq::message_t size(tmp_size);
      memcpy(size.data(), &tmp_size, sizeof tmp_size);

@@ -118,7 +118,7 @@ namespace ROOT {
       ::WCTEMPMTPPS *ptr = 0;
       static ::TVirtualIsAProxy* isa_proxy = new ::TIsAProxy(typeid(::WCTEMPMTPPS));
       static ::ROOT::TGenericClassInfo 
-         instance("WCTEMPMTPPS", "WCTEMPMTPPS.h", 10,
+         instance("WCTEMPMTPPS", "WCTEMPMTPPS.h", 13,
                   typeid(::WCTEMPMTPPS), ::ROOT::Internal::DefineBehavior(ptr, ptr),
                   &WCTEMPMTPPS_Dictionary, isa_proxy, 4,
                   sizeof(::WCTEMPMTPPS) );
@@ -253,7 +253,7 @@ namespace ROOT {
       ::TriggerInfo *ptr = 0;
       static ::TVirtualIsAProxy* isa_proxy = new ::TIsAProxy(typeid(::TriggerInfo));
       static ::ROOT::TGenericClassInfo 
-         instance("TriggerInfo", "TriggerType.h", 116,
+         instance("TriggerInfo", "TriggerType.h", 115,
                   typeid(::TriggerInfo), ::ROOT::Internal::DefineBehavior(ptr, ptr),
                   &TriggerInfo_Dictionary, isa_proxy, 4,
                   sizeof(::TriggerInfo) );
@@ -523,7 +523,7 @@ namespace ROOT {
       ::MPMTHit *ptr = 0;
       static ::TVirtualIsAProxy* isa_proxy = new ::TIsAProxy(typeid(::MPMTHit));
       static ::ROOT::TGenericClassInfo 
-         instance("MPMTHit", "MPMTMessages.h", 126,
+         instance("MPMTHit", "MPMTMessages.h", 125,
                   typeid(::MPMTHit), ::ROOT::Internal::DefineBehavior(ptr, ptr),
                   &MPMTHit_Dictionary, isa_proxy, 4,
                   sizeof(::MPMTHit) );
@@ -568,7 +568,7 @@ namespace ROOT {
       ::P_MPMTHit *ptr = 0;
       static ::TVirtualIsAProxy* isa_proxy = new ::TIsAProxy(typeid(::P_MPMTHit));
       static ::ROOT::TGenericClassInfo 
-         instance("P_MPMTHit", "MPMTMessages.h", 177,
+         instance("P_MPMTHit", "MPMTMessages.h", 176,
                   typeid(::P_MPMTHit), ::ROOT::Internal::DefineBehavior(ptr, ptr),
                   &P_MPMTHit_Dictionary, isa_proxy, 4,
                   sizeof(::P_MPMTHit) );
