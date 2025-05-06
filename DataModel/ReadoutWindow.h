@@ -188,6 +188,8 @@ public:
     // std::cout<<"readout window serialise"<<std::endl;
 
     bs & spill_num;
+    bs & readout_num;
+    bs & start_counter;
     
     unsigned int size = 0;
     
