@@ -154,6 +154,17 @@ public:
     mpmt_collection=0;
     //printf("e7\n");
   }
+
+  void Clear(){
+    triggers_info = 0;
+    mpmt_hits.clear();
+    mpmt_waveforms.clear();
+    hk_mpmt_hits.clear();
+    trigger_hits=0;
+    tdc_hits.clear();
+    qdc_hits.clear();
+    mpmt_collection=0;
+  }
   
   bool Print(){
     
@@ -188,6 +199,8 @@ public:
     // std::cout<<"readout window serialise"<<std::endl;
 
     bs & spill_num;
+    bs & start_counter;
+    bs & readout_num;
     
     unsigned int size = 0;
     
