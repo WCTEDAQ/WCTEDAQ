@@ -182,7 +182,7 @@ void NewTrigger::Thread(Thread_args* arg){
       
       // FINDME
       args->m_data->hitrates_mtx.lock();
-      memcpy(&(args->m_data->hitrates[it->first][0]), &(it->second->hitcounts[0]), (sizeof(unsigned int)*132));
+      // Ben commented out for zmq bug    memcpy(&(args->m_data->hitrates[it->first][0]), &(it->second->hitcounts[0]), (sizeof(unsigned int)*132));
       args->m_data->hitrates_mtx.unlock();
       
       if(args->m_data->out_data_chunks->count(it->first)){

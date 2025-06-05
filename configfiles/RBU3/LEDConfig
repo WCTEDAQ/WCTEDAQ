@@ -1,0 +1,2 @@
+alert_prewarn_us 100  # microseconds between when the alert is sent out, and when the MPMT is asked to flash
+bens_offset 200000000    # the offset. the offset for ben. the offset added specifically for ben. ben's offset.

@@ -710,7 +710,7 @@ bool NewWindowBuilder::BuildWindow(void* data){
    tmp->triggers_info=&args->mpmt_collection->triggers_info;
    //tmp->start_counter=args->header_coarse_counter;
    tmp->start_counter=0;
-   if(args->mpmt_collection->triggers_info.size())tmp->start_counter=args->mpmt_collection->triggers_info.at(0)->time;
+   if(args->mpmt_collection->triggers_info.size()) tmp->start_counter=args->mpmt_collection->triggers_info.at(0)->time;
    args->data->readout_num_mtx.lock();
    tmp->readout_num=args->data->readout_num;
    args->data->readout_num++;

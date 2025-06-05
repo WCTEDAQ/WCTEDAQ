@@ -1,0 +1,3 @@
+#test1 DummyTool configfiles/test/DummyToolConfig
+#test2 DummyTool configfiles/test/DummyToolConfig
+testreceive testreceive Null

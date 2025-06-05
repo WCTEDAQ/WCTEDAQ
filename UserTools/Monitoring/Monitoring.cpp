@@ -313,8 +313,8 @@ void Monitoring::Thread(Thread_args* arg){
       args->sock->send(identifier_msg, ZMQ_SNDMORE);
       
       unsigned int tmp_size = args->pps->size();
-      zmq::message_t size(tmp_size);
-      memcpy(size.data(), &tmp_size, sizeof tmp_size);
+      zmq::message_t size(sizeof(tmp_size));
+      memcpy(size.data(), &tmp_size, sizeof(tmp_size));
       args->sock->send(size, ZMQ_SNDMORE);
       
       for(unsigned int i=0; i< args->pps->size()-1; i++){
